@@ -1,5 +1,5 @@
 {
-  "name": "team-contributions",
+  "name": "jam-checker",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "lint": "eslint \"src/**/*.{ts}\" --fix && prettier --write \"src/**/*.{ts,html,scss}\""
+    "lint": "eslint \"src/**/*.ts\" --fix && prettier --write \"src/**/*.{ts,html,scss}\""
   },
   "private": true,
   "dependencies": {
