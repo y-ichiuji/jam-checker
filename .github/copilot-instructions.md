@@ -6,7 +6,7 @@
 
 - **名前**: Jam Checker
 - **目的**: 異なる時間帯の交通混雑状況をマップ上に視覚的に表示し、ユーザーが効率的な移動計画を立てられるよう支援する
-- **使用技術**: Angular 19, TypeScript, RxJS, HTML, SCSS
+- **使用技術**: Angular 19, TypeScript, RxJS, HTML, Tailwind CSS
 - **パッケージ管理**: yarn
 - **コード品質管理**: ESLint, Prettier
 - **プロジェクト管理**: GitHub
@@ -17,7 +17,7 @@
 
 - **フレームワーク**: Angular 19
 - **状態管理**: Angular Signal
-- **スタイリング**: SCSS
+- **スタイリング**: Tailwind CSS
 - **コンポーネント設計**:
   - 機能ごとに独立したモジュール化されたコンポーネント
   - Presentational/Container パターンの採用
@@ -27,11 +27,11 @@
 ### コーディング規約
 
 - **TypeScript**: 最新の機能と型定義を最大限に活用
-- **コンポーネント命名**: PascalCase (例: `TrafficMapComponent`)
-- **サービス命名**: PascalCase + 'Service' (例: `TrafficDataService`)
-- **インターフェース命名**: PascalCase + 'I' プレフィックス (例: `ITrafficData`)
-- **ファイル命名**: kebab-case (例: `traffic-map.component.ts`)
-- **CSS クラス命名**: BEM方式を採用
+- **コンポーネント命名**: PascalCase (例: `HogeFugaComponent`)
+- **サービス命名**: PascalCase + 'Service' (例: `HogeDataService`)
+- **インターフェース命名**: PascalCase + 'I' プレフィックス (例: `IHogeData`)
+- **ファイル命名**: kebab-case (例: `hoge-fuga.component.ts`)
+- **CSS クラス命名**: Tailwind CSSのユーティリティクラスを利用したアプローチを採用
 - **非同期処理**: Signalを基本とし、必要に応じてRxJSを補助的に使用
 - **コメント**: JSDocスタイルのコメントを推奨
 - **パッケージのインストール**: yarnを使用（例: `yarn add package-name`、`yarn add -D package-name`）
@@ -48,22 +48,55 @@
 ```
 src/
 |-- app/
-|   |-- core/              # コアモジュール（インターセプター、ガード、ディレクティブ、パイプ）
-|   |-- store/             # グローバルな状態管理（Signal）
-|   |-- components/        # 共有コンポーネント
-|   |-- pages/             # ページコンポーネント
-|       |-- hoge/          # hoge機能ページ
-|           |-- components/      # ページ固有のUIコンポーネント
-|               |-- hoge-view/   # Presentational (Dumb) コンポーネント
-|               |-- hoge-item/   # その他のUIコンポーネント
-|           |-- hoge.component.ts      # ページのContainer (Smart) コンポーネント
-|           |-- hoge.component.html    # コンテナコンポーネントのテンプレート
-|           |-- hoge.component.scss    # コンテナコンポーネントのスタイル
-|           |-- hoge.signal.ts         # ページ固有の状態管理（Signal）
-|           |-- services/        # ページ固有のサービス
-|           |-- models/          # ページ固有のモデル
-|   |-- models/            # データモデル、インターフェース
-|   |-- services/          # グローバルサービス
+|   |-- core/                          # コアモジュール
+|   |   |-- guards/                    # ルートガード
+|   |   |-- interceptors/              # HTTPインターセプター
+|   |   |-- directives/                # 共通ディレクティブ
+|   |   |-- pipes/                     # 共通パイプ
+|   |
+|   |-- store/                         # グローバル状態管理
+|   |   |-- hoge.store.ts              # hoge関連の状態
+|   |
+|   |-- components/                    # 共有コンポーネント
+|   |   |-- ui/                        # 再利用可能なUIコンポーネント
+|   |   |   |-- button/                # ボタンコンポーネント
+|   |   |   |-- card/                  # カードコンポーネント
+|   |   |   |-- loading/               # ローディングインジケーター
+|   |   |
+|   |   |-- layout/                    # レイアウトコンポーネント
+|   |       |-- header/                # ヘッダーコンポーネント
+|   |       |-- footer/                # フッターコンポーネント
+|   |       |-- sidebar/               # サイドバーコンポーネント
+|   |
+|   |-- features/                      # 機能モジュール
+|   |   |-- hoge-fuga/                 # hoge-fuga機能
+|   |   |   |-- components/            # 機能固有のUIコンポーネント
+|   |   |   |   |-- fuga-view/         # fugaビューコンポーネント (Presentational)
+|   |   |   |   |-- piyo-selector/     # piyo選択コンポーネント (Presentational)
+|   |   |   |
+|   |   |   |-- hoge-fuga.component.ts     # hoge-fugaコンポーネント (Container)
+|   |   |   |-- hoge-fuga.component.html
+|   |   |   |-- hoge-fuga.component.scss
+|   |   |   |-- services/              # 機能固有のサービス
+|   |   |   |-- models/                # 機能固有のモデル
+|   |
+|   |-- models/                        # データモデル/インターフェース
+|   |   |-- hoge.model.ts              # hogeデータモデル
+|   |   |-- user-settings.model.ts     # ユーザー設定モデル
+|   |
+|   |-- services/                      # グローバルサービス
+|   |   |-- hoge-data.service.ts       # hogeデータサービス
+|   |   |-- api.service.ts             # API通信サービス
+|   |
+|   |-- utils/                         # ユーティリティ関数
+|       |-- date-formatter.util.ts     # 日付フォーマット
+|       |-- common-utils.ts            # 共通ユーティリティ
+|
+|-- assets/                            # 静的アセット
+|   |-- images/                        # 画像ファイル
+|   |-- icons/                         # アイコン
+|   |-- data/                          # データファイル
+|   |
 |   |-- utils/             # ユーティリティ関数
 ```
 
