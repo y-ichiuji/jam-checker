@@ -41,6 +41,16 @@
   "emmet.includeLanguages": {
     "typescript": "html"
   },
+  "tailwindCSS.includeLanguages": {
+    "typescript": "html",
+    "html": "html",
+    "plaintext": "html"
+  },
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "tailwindCSS.emmetCompletions": true,
+  "tailwindCSS.experimental.configFile": "src/styles.scss",
   "angular.enable-strict-mode-prompt": false,
   "typescript.tsdk": "node_modules/typescript/lib",
   "github.copilot.chat.codeGeneration.instructions": [
@@ -52,5 +62,11 @@
     {
       "file": ".github/.copilot-review-instructions.md"
     }
-  ]
+  ],
+  "github.copilot.chat.testGeneration.instructions": [
+    {
+      "file": ".github/.copilot-testGeneration-instructions.md"
+    }
+  ],
+  "cSpell.words": ["hoge", "fuga", "piyo", "WCAG"]
 }
