@@ -71,12 +71,13 @@ src/
 |   |-- features/                      # 機能モジュール
 |   |   |-- hoge-fuga/                 # hoge-fuga機能
 |   |   |   |-- components/            # 機能固有のUIコンポーネント
-|   |   |   |   |-- fuga-view/         # fugaビューコンポーネント (Presentational)
-|   |   |   |   |-- piyo-selector/     # piyo選択コンポーネント (Presentational)
+|   |   |   |   |-- presentational/    # Presentationalコンポーネント
+|   |   |   |   |   |-- fuga-view/     # fugaビューコンポーネント
+|   |   |   |   |   |-- piyo-selector/ # piyo選択コンポーネント
+|   |   |   |   |
+|   |   |   |   |-- container/         # Containerコンポーネント
+|   |   |   |       |-- hoge-fuga/     # hoge-fugaコンポーネント
 |   |   |   |
-|   |   |   |-- hoge-fuga.component.ts     # hoge-fugaコンポーネント (Container)
-|   |   |   |-- hoge-fuga.component.html
-|   |   |   |-- hoge-fuga.component.scss
 |   |   |   |-- services/              # 機能固有のサービス
 |   |   |   |-- models/                # 機能固有のモデル
 |   |
@@ -96,8 +97,6 @@ src/
 |   |-- images/                        # 画像ファイル
 |   |-- icons/                         # アイコン
 |   |-- data/                          # データファイル
-|   |
-|   |-- utils/             # ユーティリティ関数
 ```
 
 ## 開発手順と進行計画
