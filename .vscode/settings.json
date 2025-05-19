@@ -68,5 +68,5 @@
       "file": ".github/.copilot-testGeneration-instructions.md"
     }
   ],
-  "cSpell.ignoreWords": ["hoge", "fuga", "piyo"]
+  "cSpell.words": ["hoge", "fuga", "piyo", "WCAG"]
 }
