@@ -27,12 +27,12 @@ Jam Checkerはフロントエンド中心のアプリケーションで、初期
 
 ## 主要な技術的決定
 
-### 1. Angular 19の採用
+### 1. Angular 19.2の採用
 
 - **理由**: 最新のAngularフレームワークを採用し、パフォーマンスと開発効率を向上させるため
 - **メリット**:
   - スタンドアロンコンポーネントのサポート
-  - Angularシグナルによる効率的な状態管理
+  - Angularシグナルによる効率的な状態管理（input/outputシグナル関数）
   - TypeScriptによる型安全性
   - コンポーネントベースのアーキテクチャ
 
@@ -54,7 +54,9 @@ Jam Checkerはフロントエンド中心のアプリケーションで、初期
 ### 4. データフローパターン
 
 - **単方向データフロー**: Containerコンポーネントからのデータの変更が、Presentationalコンポーネントに伝播される
-- **イベント処理**: Presentationalコンポーネントからのイベントは、Outputデコレータを使用してContainerコンポーネントに伝えられる
+- **イベント処理**: Presentationalコンポーネントからのイベントは、outputシグナル関数を使用してContainerコンポーネントに伝えられる
+
+具体的な実装例については、`.github/.copilot-codeGeneration-instructions.md`を参照してください。
 
 ## コンポーネント関係図
 
@@ -82,7 +84,7 @@ App Component
 1. Map Display Component (Presentational)
    - マップの視覚的表示のみを担当
    - 混雑状況のレンダリングを行う
-   - ユーザー操作（ズーム、パン）を親コンポーネントに通知
+   - ユーザー操作（ズーム、パン）をoutputシグナルを通じて親コンポーネントに通知
 
 2. Map Container Component
    - TrafficDataServiceからデータを取得
@@ -93,7 +95,7 @@ App Component
 
 1. Time Selector Display Component (Presentational)
    - 時間選択UI（スライダー、セレクトボックスなど）を表示
-   - 選択された時間を親コンポーネントに通知
+   - 選択された時間をoutputシグナルを通じて親コンポーネントに通知
 
 2. Time Selector Container Component
    - 利用可能な時間帯リストの管理
@@ -103,10 +105,10 @@ App Component
 ### データフロー
 
 ```text
-User Action → Presentational Component → Event Output →
-Container Component → Service Call →
-Data Update → Signal Update →
-Container Component Rerender → Presentational Component Update
+User Action → Presentationalコンポーネント → outputシグナル →
+Containerコンポーネント → サービス呼び出し →
+データ更新 → シグナル更新 →
+Containerコンポーネント再レンダリング → Presentationalコンポーネント更新
 ```
 
 ## エラーハンドリングパターン
@@ -127,7 +129,7 @@ Container Component Rerender → Presentational Component Update
    - Routingモジュールを使用して機能ごとに分割
 
 2. **メモ化テクニック**:
-   - 計算コストの高いロジックはコンピューテッドシグナルを使用してメモ化
+   - 計算コストの高いロジックは`computed`シグナルを使用してメモ化
    - 不要な再計算を防止
 
 3. **変更検出の最適化**:

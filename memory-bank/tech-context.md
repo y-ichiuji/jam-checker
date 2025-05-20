@@ -6,7 +6,7 @@ Jam Checkerの開発には、以下の技術スタックを使用しています
 
 ### コアフレームワークとライブラリ
 
-- **Angular 19**: メインフレームワーク
+- **Angular 19.2.6**: メインフレームワーク
   - スタンドアロンコンポーネント
   - Angular Signal API
   - 依存性注入システム
@@ -24,7 +24,7 @@ Jam Checkerの開発には、以下の技術スタックを使用しています
 
 ### スタイリングとUI
 
-- **Tailwind CSS**: ユーティリティファーストのCSSフレームワーク
+- **Tailwind CSS 4.1.7**: ユーティリティファーストのCSSフレームワーク
   - レスポンシブデザイン
   - カスタマイズ可能なコンポーネント
   - パフォーマンス最適化
@@ -37,14 +37,14 @@ Jam Checkerの開発には、以下の技術スタックを使用しています
 
 - **Node.js**: JavaScriptランタイム
 - **yarn**: パッケージ管理ツール
-- **Angular CLI**: Angularプロジェクト管理ツール
-- **ESLint**: コード品質チェックツール
-- **Prettier**: コードフォーマッター
+- **Angular CLI 19.2.7**: Angularプロジェクト管理ツール
+- **ESLint 9.26.0**: コード品質チェックツール
+- **Prettier 3.5.3**: コードフォーマッター
 
 ### テスト
 
-- **Jasmine**: テストフレームワーク
-- **Karma**: テストランナー
+- **Jasmine 5.2.0**: テストフレームワーク
+- **Karma 6.4.0**: テストランナー
 - **Angular Testing Utilities**: コンポーネントテスト用ユーティリティ
 
 ### ビルドとデプロイ
@@ -56,7 +56,7 @@ Jam Checkerの開発には、以下の技術スタックを使用しています
 
 ### 必要条件
 
-- Node.js 20.x以上
+- .node-versionを参照
 - yarn 2.x以上
 - Git
 
@@ -64,7 +64,7 @@ Jam Checkerの開発には、以下の技術スタックを使用しています
 
 ```bash
 # リポジトリをクローン
-git clone https://github.com/username/jam-checker.git
+git clone https://github.com/y-ichiuji/jam-checker.git
 cd jam-checker
 
 # 依存関係のインストール
@@ -76,7 +76,7 @@ yarn start
 
 ### 開発サーバー
 
-開発サーバーは `http://localhost:4200` で起動します。
+開発サーバーは `http://localhost:4201` で起動します。
 ソースコードの変更を保存すると、アプリケーションは自動的にリロードされます。
 
 ### プロジェクトの構築
@@ -123,17 +123,20 @@ yarn lint
 ```json
 {
   "dependencies": {
-    "@angular/animations": "^19.0.0",
-    "@angular/common": "^19.0.0",
-    "@angular/compiler": "^19.0.0",
-    "@angular/core": "^19.0.0",
-    "@angular/forms": "^19.0.0",
-    "@angular/platform-browser": "^19.0.0",
-    "@angular/platform-browser-dynamic": "^19.0.0",
-    "@angular/router": "^19.0.0",
+    "@angular/animations": "^19.2.6",
+    "@angular/common": "^19.2.6",
+    "@angular/compiler": "^19.2.6",
+    "@angular/core": "^19.2.6",
+    "@angular/forms": "^19.2.6",
+    "@angular/platform-browser": "^19.2.6",
+    "@angular/platform-browser-dynamic": "^19.2.6",
+    "@angular/router": "^19.2.6",
+    "@tailwindcss/postcss": "^4.1.7",
+    "postcss": "^8.5.3",
     "rxjs": "~7.8.0",
+    "tailwindcss": "^4.1.7",
     "tslib": "^2.3.0",
-    "zone.js": "~0.14.0"
+    "zone.js": "~0.15.0"
   }
 }
 ```
@@ -143,20 +146,26 @@ yarn lint
 ```json
 {
   "devDependencies": {
-    "@angular-devkit/build-angular": "^19.0.0",
-    "@angular/cli": "^19.0.0",
-    "@angular/compiler-cli": "^19.0.0",
+    "@angular-devkit/build-angular": "^19.2.7",
+    "@angular/cli": "^19.2.7",
+    "@angular/compiler-cli": "^19.2.6",
+    "@eslint/js": "^9.26.0",
     "@types/jasmine": "~5.1.0",
-    "autoprefixer": "^10.4.14",
-    "jasmine-core": "~5.1.0",
+    "angular-cli-ghpages": "2.0.3",
+    "eslint": "^9.26.0",
+    "eslint-config-prettier": "^10.1.3",
+    "eslint-plugin-html": "^8.1.2",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-prettier": "^5.4.0",
+    "jasmine-core": "~5.2.0",
     "karma": "~6.4.0",
     "karma-chrome-launcher": "~3.2.0",
     "karma-coverage": "~2.2.0",
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "~2.1.0",
-    "postcss": "^8.4.23",
-    "tailwindcss": "^3.3.2",
-    "typescript": "~5.2.2"
+    "prettier": "^3.5.3",
+    "typescript": "~5.5.2",
+    "typescript-eslint": "^8.32.0"
   }
 }
 ```
@@ -171,10 +180,10 @@ yarn add package-name           # 通常の依存関係
 yarn add -D package-name        # 開発依存関係
 
 # スクリプトの実行
-yarn start                      # 開発サーバーの起動
+yarn start                      # 開発サーバーの起動 (ポート4201)
 yarn build                      # プロダクションビルドの作成
 yarn test                       # テストの実行
-yarn lint                       # リントチェックの実行
+yarn lint                       # リントチェックの実行 (ESLintとPrettierを実行)
 ```
 
 ### Angular CLI
@@ -193,11 +202,8 @@ ng generate interface models/traffic-data
 ### ESLint & Prettier
 
 ```bash
-# コードのリント
+# コードのリントとフォーマット
 yarn lint
-
-# コードのフォーマット
-yarn format
 ```
 
 ## データフロー
