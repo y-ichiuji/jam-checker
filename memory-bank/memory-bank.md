@@ -8,11 +8,11 @@ The Memory Bank consists of core files and optional context files, all in Markdo
 
 ```mermaid
 flowchart TD
-    PB[projectbrief.md] --> PC[productContext.md]
-    PB --> SP[systemPatterns.md]
-    PB --> TC[techContext.md]
+    PB[project-brief.md] --> PC[product-context.md]
+    PB --> SP[system-patterns.md]
+    PB --> TC[tech-context.md]
 
-    PC --> AC[activeContext.md]
+    PC --> AC[active-context.md]
     SP --> AC
     TC --> AC
 
@@ -21,19 +21,19 @@ flowchart TD
 
 ### Core Files (Required)
 
-1. `projectbrief.md`
+1. `project-brief.md`
    - Foundation document that shapes all other files
    - Created at project start if it doesn't exist
    - Defines core requirements and goals
    - Source of truth for project scope
 
-2. `productContext.md`
+2. `product-context.md`
    - Why this project exists
    - Problems it solves
    - How it should work
    - User experience goals
 
-3. `activeContext.md`
+3. `active-context.md`
    - Current work focus
    - Recent changes
    - Next steps
@@ -41,14 +41,14 @@ flowchart TD
    - Important patterns and preferences
    - Learnings and project insights
 
-4. `systemPatterns.md`
+4. `system-patterns.md`
    - System architecture
    - Key technical decisions
    - Design patterns in use
    - Component relationships
    - Critical implementation paths
 
-5. `techContext.md`
+5. `tech-context.md`
    - Technologies used
    - Development setup
    - Technical constraints
@@ -115,6 +115,6 @@ flowchart TD
     Start --> Process
 ```
 
-Note: When triggered by **update memory bank**, I MUST review every memory bank file, even if some don't require updates. Focus particularly on activeContext.md and progress.md as they track current state.
+Note: When triggered by **update memory bank**, I MUST review every memory bank file, even if some don't require updates. Focus particularly on active-context.md and progress.md as they track current state.
 
 REMEMBER: After every memory reset, I begin completely fresh. The Memory Bank is my only link to previous work. It must be maintained with precision and clarity, as my effectiveness depends entirely on its accuracy.
