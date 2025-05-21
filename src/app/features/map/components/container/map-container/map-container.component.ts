@@ -28,7 +28,7 @@ export class MapContainerComponent implements OnInit {
   }
 
   protected async loadMapData(): Promise<void> {
-    await this.mapService.fetchJapanMapData();
+    await this.mapService.fetchWorldMapData();
   }
 
   protected handleMapClick(event: { x: number; y: number }): void {

@@ -26,9 +26,9 @@ export class MapService {
   readonly error = this.errorSignal.asReadonly();
 
   /**
-   * 日本地図のGeoJSONデータを取得します
+   * 世界地図のGeoJSONデータを取得します
    */
-  async fetchJapanMapData(): Promise<void> {
+  async fetchWorldMapData(): Promise<void> {
     if (this.loadingSignal()) {
       return;
     }
