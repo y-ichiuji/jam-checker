@@ -432,7 +432,8 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
 
     // クリック位置をマップ座標に変換（逆変換）
     const mapX = (position.x - transform.offsetX) / transform.scale;
-    const mapY = 90 - (position.y - transform.offsetY) / transform.scale;
+    const mapY =
+      MAP_CONTAINER_CONSTANTS.LATITUDE_OFFSET - (position.y - transform.offsetY) / transform.scale;
 
     // クリック検出の許容距離を計算
     // 固定ピクセルサイズ（画面上の感覚）を保つため、基本値は大きくし、最小値も設定する
@@ -440,7 +441,6 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
     const minHitDistance = 0.05; // 最小ヒット距離（地図座標系）
     const hitDistance = Math.max(minHitDistance, baseHitDistance / transform.scale); // スケールに応じて調整し、最小値を確保
 
-    let d = Infinity;
     // 道路データからクリックされた道路を検索
     for (const feature of roadData.features) {
       if (feature.geometry?.type === 'LineString') {
@@ -466,7 +466,6 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
 
           // 点と線分の距離を計算
           const distance = this.distanceToLineSegment(mapX, mapY, p1[0], p1[1], p2[0], p2[1]);
-          d = Math.min(d, distance);
 
           if (distance < hitDistance) {
             return feature;
