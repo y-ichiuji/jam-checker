@@ -4,7 +4,21 @@
     [mapData]="mapData()"
     [loading]="loading()"
     [error]="error()"
+    [transform]="mapTransform()"
     (mapClick)="handleMapClick($event)"
     (retryLoad)="loadMapData()"
+    (panEvent)="handlePan($event)"
+    (zoomEvent)="handleZoom($event)"
+    (boundsChange)="handleMapBoundsChange($event)"
   ></app-map-view>
+
+  <!-- リセットボタン（変換情報が変更されている場合のみ表示） -->
+  @if (hasTransformChanged()) {
+    <button
+      (click)="resetMapTransform()"
+      class="absolute bottom-4 right-4 bg-blue-500 text-white px-3 py-2 rounded shadow hover:bg-blue-600"
+    >
+      リセット
+    </button>
+  }
 </div>

@@ -2,6 +2,7 @@ import {
   AfterViewInit,
   Component,
   ElementRef,
+  HostListener,
   OnDestroy,
   ViewChild,
   effect,
@@ -11,6 +12,14 @@ import {
 
 import { LoadingViewComponent } from '../../../../../components/ui/loading-view/loading-view.component';
 import { FeatureCollection, Position } from '../../../../../models/geojson.model';
+import {
+  MapBounds,
+  MapTransform,
+  PanEvent,
+  Point,
+  ZoomEvent,
+  createInitialTransform,
+} from '../../../models/map-transform.model';
 import { MapErrorViewComponent } from '../map-error-view/map-error-view.component';
 
 @Component({
@@ -32,14 +41,30 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
   // 入力シグナル - エラー状態
   readonly error = input<string | null>(null);
 
+  // 入力シグナル - 地図変換情報
+  readonly transform = input<MapTransform>(createInitialTransform());
+
   // 出力シグナル - クリックイベントを発信
   readonly mapClick = output<{ x: number; y: number }>();
 
   // 出力シグナル - 再試行イベントを発信
   readonly retryLoad = output<void>();
 
+  // 出力シグナル - パンイベントを発信
+  readonly panEvent = output<PanEvent>();
+
+  // 出力シグナル - ズームイベントを発信
+  readonly zoomEvent = output<ZoomEvent>();
+
+  // 出力シグナル - マップ境界変更イベントを発信
+  readonly boundsChange = output<MapBounds>();
+
   private context: CanvasRenderingContext2D | null = null;
   private resizeObserver: ResizeObserver | null = null;
+
+  // ドラッグ操作用の変数
+  private isDragging = false;
+  private lastMousePosition: Point | null = null;
 
   constructor() {
     // 地図データの変更を監視
@@ -47,12 +72,27 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
       const data = this.mapData();
       if (data && this.context) {
         this.drawMap();
+
+        // 地図の境界計算
+        const bounds = this.calculateBounds(data);
+        if (bounds) {
+          this.boundsChange.emit(bounds);
+        }
+      }
+    });
+
+    // 変換情報の変更を監視
+    effect(() => {
+      this.transform();
+      if (this.mapData() && this.context) {
+        this.drawMap();
       }
     });
   }
 
   ngAfterViewInit(): void {
     this.initializeCanvas();
+    this.setupEventListeners();
   }
 
   ngOnDestroy(): void {
@@ -60,6 +100,9 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
     }
+
+    // イベントリスナーの削除
+    this.removeEventListeners();
   }
 
   private initializeCanvas(): void {
@@ -98,6 +141,199 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
+   * マウスホイールイベントのハンドラ
+   */
+  @HostListener('wheel', ['$event'])
+  private handleWheel(event: WheelEvent): void {
+    event.preventDefault();
+
+    if (!this.mapCanvasRef) return;
+
+    const canvas = this.mapCanvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+
+    // マウス位置をキャンバス座標系に変換
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    // ズーム量の計算（正: 拡大、負: 縮小）
+    const zoomDirection = event.deltaY < 0 ? 1 : -1;
+    const zoomFactor = 1 + zoomDirection * 0.1; // 10%ずつ拡大/縮小
+
+    this.zoomEvent.emit({
+      deltaScale: zoomFactor,
+      centerX: mouseX,
+      centerY: mouseY,
+    });
+  }
+
+  /**
+   * イベントリスナーの設定
+   */
+  private setupEventListeners(): void {
+    const canvas = this.mapCanvasRef?.nativeElement;
+    if (!canvas) return;
+
+    // マウスダウンイベント
+    canvas.addEventListener('mousedown', this.handleMouseDown);
+
+    // タッチイベント（モバイル対応）
+    canvas.addEventListener('touchstart', this.handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', this.handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', this.handleTouchEnd);
+
+    // クリックイベント
+    canvas.addEventListener('click', this.handleClick);
+  }
+
+  /**
+   * イベントリスナーの削除
+   */
+  private removeEventListeners(): void {
+    const canvas = this.mapCanvasRef?.nativeElement;
+    if (!canvas) return;
+
+    canvas.removeEventListener('mousedown', this.handleMouseDown);
+    canvas.removeEventListener('touchstart', this.handleTouchStart);
+    canvas.removeEventListener('touchmove', this.handleTouchMove);
+    canvas.removeEventListener('touchend', this.handleTouchEnd);
+    canvas.removeEventListener('click', this.handleClick);
+
+    // グローバルイベントリスナーの削除
+    document.removeEventListener('mousemove', this.handleMouseMove);
+    document.removeEventListener('mouseup', this.handleMouseUp);
+  }
+
+  /**
+   * マウスダウンイベントハンドラ
+   */
+  private handleMouseDown = (event: MouseEvent): void => {
+    event.preventDefault();
+    this.isDragging = true;
+
+    const canvas = this.mapCanvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+
+    this.lastMousePosition = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
+
+    // グローバルイベントを追加
+    document.addEventListener('mousemove', this.handleMouseMove);
+    document.addEventListener('mouseup', this.handleMouseUp);
+  };
+
+  /**
+   * マウス移動イベントハンドラ
+   */
+  private handleMouseMove = (event: MouseEvent): void => {
+    if (!this.isDragging || !this.lastMousePosition) return;
+
+    const canvas = this.mapCanvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+
+    const currentPosition = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
+
+    const deltaX = currentPosition.x - this.lastMousePosition.x;
+    const deltaY = currentPosition.y - this.lastMousePosition.y;
+
+    // パンイベントを発行
+    this.panEvent.emit({ deltaX, deltaY });
+
+    // 最後のマウス位置を更新
+    this.lastMousePosition = currentPosition;
+  };
+
+  /**
+   * マウスアップイベントハンドラ
+   */
+  private handleMouseUp = (): void => {
+    this.isDragging = false;
+    this.lastMousePosition = null;
+
+    // グローバルイベントを削除
+    document.removeEventListener('mousemove', this.handleMouseMove);
+    document.removeEventListener('mouseup', this.handleMouseUp);
+  };
+
+  /**
+   * タッチ開始イベントハンドラ
+   */
+  private handleTouchStart = (event: TouchEvent): void => {
+    if (event.touches.length !== 1) return;
+
+    event.preventDefault();
+    this.isDragging = true;
+
+    const touch = event.touches[0];
+    if (!touch) return;
+
+    const canvas = this.mapCanvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+
+    this.lastMousePosition = {
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
+    };
+  };
+
+  /**
+   * タッチ移動イベントハンドラ
+   */
+  private handleTouchMove = (event: TouchEvent): void => {
+    if (!this.isDragging || !this.lastMousePosition || event.touches.length !== 1) return;
+
+    event.preventDefault();
+    const touch = event.touches[0];
+    if (!touch) return;
+
+    const canvas = this.mapCanvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+
+    const currentPosition = {
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
+    };
+
+    const deltaX = currentPosition.x - this.lastMousePosition.x;
+    const deltaY = currentPosition.y - this.lastMousePosition.y;
+
+    // パンイベントを発行
+    this.panEvent.emit({ deltaX, deltaY });
+
+    // 最後のタッチ位置を更新
+    this.lastMousePosition = currentPosition;
+  };
+
+  /**
+   * タッチ終了イベントハンドラ
+   */
+  private handleTouchEnd = (): void => {
+    this.isDragging = false;
+    this.lastMousePosition = null;
+  };
+
+  /**
+   * クリックイベントハンドラ
+   */
+  private handleClick = (event: MouseEvent): void => {
+    // ドラッグ操作の直後のクリックは無視
+    if (this.isDragging) return;
+
+    const canvas = this.mapCanvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    this.mapClick.emit({ x, y });
+  };
+
+  /**
    * 地図データをキャンバスに描画する
    */
   private drawMap(): void {
@@ -110,33 +346,43 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     // キャンバスをクリア
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // 現在の変換情報を取得
+    const currentTransform = this.transform();
+
     // GeoJSONの描画
-    this.drawGeoJSON(data, ctx, canvas);
+    this.drawGeoJSONWithTransform(data, ctx, canvas, currentTransform);
   }
 
   /**
-   * GeoJSONデータをキャンバスに描画する
+   * 変換情報を適用してGeoJSONデータをキャンバスに描画する
    */
-  private drawGeoJSON(
+  private drawGeoJSONWithTransform(
     geojson: FeatureCollection,
     ctx: CanvasRenderingContext2D,
-    canvas: HTMLCanvasElement
+    canvas: HTMLCanvasElement,
+    transform: MapTransform
   ): void {
     // 地図の境界を計算
     const bounds = this.calculateBounds(geojson);
     if (!bounds) return;
 
-    // 縮尺の計算（キャンバスに合わせる）
-    // 日本の国土は南北に長いので、縦方向のスケールを少し調整
-    const scaleX = (canvas.width / (bounds.maxX - bounds.minX)) * 0.95;
-    const scaleY = (canvas.height / (bounds.maxY - bounds.minY)) * 0.85;
-    const scale = Math.min(scaleX, scaleY); // 小さい方を採用して縦横比を保持
+    // 初回表示の場合のみ自動スケーリングを行う
+    let scale = transform.scale;
+    let offsetX = transform.offsetX;
+    let offsetY = transform.offsetY;
 
-    // 中心位置の調整
-    const offsetX = canvas.width / 2 - ((bounds.maxX + bounds.minX) / 2) * scale;
-    // 日本地図は画面中央よりやや上に配置
-    const offsetY =
-      canvas.height / 2 - ((bounds.maxY + bounds.minY) / 2) * scale - canvas.height * 0.1;
+    // スケールとオフセットが初期値の場合は自動調整
+    if (scale === 1 && offsetX === 0 && offsetY === 0) {
+      // 縮尺の計算（キャンバスに合わせる）
+      const scaleX = (canvas.width / (bounds.maxX - bounds.minX)) * 0.95;
+      const scaleY = (canvas.height / (bounds.maxY - bounds.minY)) * 0.85;
+      scale = Math.min(scaleX, scaleY); // 小さい方を採用して縦横比を保持
+
+      // 中心位置の調整
+      offsetX = canvas.width / 2 - ((bounds.maxX + bounds.minX) / 2) * scale;
+      // 日本地図は画面中央よりやや上に配置
+      offsetY = canvas.height / 2 - ((bounds.maxY + bounds.minY) / 2) * scale - canvas.height * 0.1;
+    }
 
     // 各フィーチャーを描画
     geojson.features.forEach(feature => {
