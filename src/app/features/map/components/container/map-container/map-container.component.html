@@ -4,7 +4,13 @@
     [mapData]="mapData()"
     [loading]="loading()"
     [error]="error()"
+    [transform]="mapTransform()"
     (mapClick)="handleMapClick($event)"
     (retryLoad)="loadMapData()"
+    (panEvent)="handlePan($event)"
+    (zoomEvent)="handleZoom($event)"
+    (boundsChange)="handleMapBoundsChange($event)"
+    (initialTransformChange)="handleInitialTransformChange($event)"
+    (canvasInfoChange)="handleCanvasInfoChange($event)"
   ></app-map-view>
 </div>
