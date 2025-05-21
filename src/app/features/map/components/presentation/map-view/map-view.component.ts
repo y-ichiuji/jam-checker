@@ -290,6 +290,7 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
 
     // スケールとオフセットが初期値の場合は自動調整
     if (scale === 1 && offsetX === 0 && offsetY === 0) {
+      // 通常の自動スケーリング（全体表示）
       // 縮尺の計算（キャンバスに合わせる）
       const scaleX = (canvas.width / (bounds.maxX - bounds.minX)) * 0.95;
       const scaleY = (canvas.height / (bounds.maxY - bounds.minY)) * 0.85;
@@ -309,7 +310,7 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
         scale,
         offsetX,
         offsetY,
-        minScale: calculatedMinScale, // 自動計算した最小スケールを設定
+        minScale: calculatedMinScale,
       });
     }
 

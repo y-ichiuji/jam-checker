@@ -38,6 +38,8 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
   ngOnInit(): void {
     // コンポーネント初期化時に地図データを取得
     this.loadMapData();
+    // 現在位置を取得する
+    this.getCurrentLocation();
   }
 
   ngAfterViewInit(): void {
@@ -197,6 +199,111 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
    */
   protected resetMapTransform(): void {
     this.mapTransformSignal.set(createInitialTransform());
+    this.updateTransformLimits();
+  }
+
+  /**
+   * 現在の地理位置情報を取得する
+   */
+  private getCurrentLocation(): void {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        position => {
+          // 現在位置の緯度・経度を取得
+          const latitude = position.coords.latitude;
+          const longitude = position.coords.longitude;
+          console.log('現在位置:', { latitude, longitude });
+
+          // 現在位置をマップの初期表示位置として設定
+          this.setInitialPositionToCurrentLocation(longitude, latitude);
+        },
+        error => {
+          console.error('位置情報の取得に失敗しました', error);
+          // エラー内容に応じたメッセージをコンソールに表示
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              console.warn('位置情報の使用が許可されていません');
+              break;
+            case error.POSITION_UNAVAILABLE:
+              console.warn('位置情報が利用できません');
+              break;
+            case error.TIMEOUT:
+              console.warn('位置情報の取得がタイムアウトしました');
+              break;
+            default:
+              console.warn('位置情報の取得中に未知のエラーが発生しました');
+          }
+          // 位置情報が取得できない場合はデフォルト表示のままとする
+        },
+        // オプション：タイムアウトを10秒に設定、高精度モードを有効
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
+      );
+    } else {
+      console.error('このブラウザでは位置情報がサポートされていません');
+      // Geolocationがサポートされていない場合はデフォルト表示
+    }
+  }
+
+  /**
+   * 現在位置を中心にマップの初期表示を設定する
+   */
+  private setInitialPositionToCurrentLocation(longitude: number, latitude: number): void {
+    // マップデータが読み込まれるのを待つ
+    const waitForMapData = (): void => {
+      if (this.mapDataSignal()) {
+        // キャンバス要素を取得してサイズを確認
+        const canvasElement = document.querySelector('canvas');
+        if (!canvasElement) {
+          // キャンバスがまだない場合は少し待ってから再試行
+          setTimeout(waitForMapData, 100);
+          return;
+        }
+
+        const canvasWidth = canvasElement.width;
+        const canvasHeight = canvasElement.height;
+
+        // スケールの設定（都市レベルの詳細度に適した値）
+        const scale = 200;
+
+        // 緯度経度を画面座標に変換
+        // MapViewComponent.projectPointと同じロジックで変換
+        const pointX = longitude * scale;
+        const pointY = (90 - latitude) * scale;
+
+        // 現在地が画面中央に来るようオフセットを計算
+        const offsetX = canvasWidth / 2 - pointX;
+        const offsetY = canvasHeight / 2 - pointY;
+
+        console.log('計算されたオフセット:', { offsetX, offsetY, scale }); // 現在位置を中心にした変換情報を設定
+        this.mapTransformSignal.update(transform => ({
+          ...transform,
+          scale: scale,
+          offsetX: offsetX,
+          offsetY: offsetY,
+          // マップ全体の表示より少し大きい最小スケールを設定
+          minScale: 50,
+        }));
+
+        // マップの再描画をトリガー
+        this.forceMapRedraw();
+      } else {
+        // マップデータがまだ読み込まれていない場合は少し待ってから再試行
+        setTimeout(waitForMapData, 100);
+      }
+    };
+
+    waitForMapData();
+  }
+
+  /**
+   * マップを強制的に再描画する
+   */
+  private forceMapRedraw(): void {
+    // 変換情報の更新と制限の更新
     this.updateTransformLimits();
   }
 }
