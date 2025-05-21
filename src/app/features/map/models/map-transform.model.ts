@@ -86,7 +86,7 @@ export function createInitialTransform(): MapTransform {
     scale: 1,
     offsetX: 0,
     offsetY: 0,
-    minScale: 2.5, // 最小値を2.5に設定（世界地図が表示できるレベル）
+    minScale: 1.0, // 最小値を1.0に設定（より広い範囲を表示できるように）
     maxScale: 5000,
     maxOffsetX: 2000,
     maxOffsetY: 1500,

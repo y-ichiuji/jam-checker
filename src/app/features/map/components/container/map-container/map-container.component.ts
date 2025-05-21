@@ -113,8 +113,11 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
   protected handleZoom(event: ZoomEvent): void {
     this.mapTransformSignal.update(transform => {
       // 新しいスケールを計算（最小・最大の制限内に収める）
+      // 最小スケールは createInitialTransform() で設定された値と
+      // setInitialPositionToCurrentLocation で設定された値の小さい方を使用
+      const effectiveMinScale = Math.min(transform.minScale, 1.0); // 最小値として1.0を確保
       const newScale = Math.max(
-        transform.minScale,
+        effectiveMinScale,
         Math.min(transform.maxScale, transform.scale * event.deltaScale)
       );
 
@@ -212,7 +215,6 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
           // 現在位置の緯度・経度を取得
           const latitude = position.coords.latitude;
           const longitude = position.coords.longitude;
-          console.log('現在位置:', { latitude, longitude });
 
           // 現在位置をマップの初期表示位置として設定
           this.setInitialPositionToCurrentLocation(longitude, latitude);
@@ -267,7 +269,7 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
         const canvasHeight = canvasElement.height;
 
         // スケールの設定（都市レベルの詳細度に適した値）
-        const scale = 200;
+        const scale = 100; // 200から100に変更して、初期表示時にもう少し広域を表示
 
         // 緯度経度を画面座標に変換
         // MapViewComponent.projectPointと同じロジックで変換
@@ -278,14 +280,13 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
         const offsetX = canvasWidth / 2 - pointX;
         const offsetY = canvasHeight / 2 - pointY;
 
-        console.log('計算されたオフセット:', { offsetX, offsetY, scale }); // 現在位置を中心にした変換情報を設定
         this.mapTransformSignal.update(transform => ({
           ...transform,
           scale: scale,
           offsetX: offsetX,
           offsetY: offsetY,
-          // マップ全体の表示より少し大きい最小スケールを設定
-          minScale: 50,
+          // マップ全体の表示できるように最小スケールを小さく設定
+          minScale: 1.0, // 50から1.0に変更して、より縮小表示できるようにする
         }));
 
         // マップの再描画をトリガー
