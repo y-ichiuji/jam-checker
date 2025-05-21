@@ -2,6 +2,8 @@
   <!-- 地図表示（ローディングとエラー表示も含む） -->
   <app-map-view
     [mapData]="mapData()"
+    [roadData]="roadData()"
+    [roadPopup]="roadPopup()"
     [loading]="loading()"
     [error]="error()"
     [transform]="mapTransform()"

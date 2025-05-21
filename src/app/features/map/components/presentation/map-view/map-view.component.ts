@@ -20,6 +20,7 @@ import {
   ZoomEvent,
   createInitialTransform,
 } from '../../../models/map-transform.model';
+import { RoadPopup } from '../../../models/road-popup.model';
 import { MapErrorViewComponent } from '../map-error-view/map-error-view.component';
 
 /**
@@ -44,6 +45,10 @@ const MAP_VIEW_CONSTANTS = {
   POLYGON_FILL_COLOR: 'rgba(230, 245, 255, 0.8)',
   /** ポリゴン線の色 */
   POLYGON_STROKE_COLOR: 'rgba(50, 120, 180, 0.9)',
+  /** 線の色 */
+  LINE_STROKE_COLOR: 'rgba(255, 0, 0, 0.8)',
+  /** 線の幅 */
+  LINE_WIDTH: 2,
   /** 緯度原点のオフセット（北緯90度） */
   LATITUDE_OFFSET: 90,
 };
@@ -65,6 +70,12 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
 
   // 入力シグナル - 地図データを受け取る
   readonly mapData = input<FeatureCollection | null>(null);
+
+  // 入力シグナル - 道路データを受け取る
+  readonly roadData = input<FeatureCollection | null>(null);
+
+  // 入力シグナル - 道路吹き出しデータを受け取る
+  readonly roadPopup = input<RoadPopup | null>(null);
 
   // 入力シグナル - 読み込み中状態
   readonly loading = input<boolean>(false);
@@ -120,11 +131,27 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
       }
     });
 
+    // 道路データの変更を監視
+    effect(() => {
+      const roadData = this.roadData();
+      if (roadData && this.context) {
+        this.drawMap();
+      }
+    });
+
     // 変換情報の変更を監視
     effect(() => {
       this.transform();
-      if (this.mapData() && this.context) {
+      if ((this.mapData() || this.roadData()) && this.context) {
         this.drawMap();
+      }
+    });
+
+    // 吹き出し情報の変更を監視
+    effect(() => {
+      this.roadPopup(); // 依存関係を確立しますが、値は後でdrawMap内で使用
+      if (this.context) {
+        this.drawMap(); // 吹き出しの状態変更時にマップを再描画
       }
     });
   }
@@ -173,7 +200,7 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
       canvas.height = parent.clientHeight;
 
       // サイズ変更後に地図を再描画
-      if (this.mapData()) {
+      if (this.mapData() || this.roadData()) {
         this.drawMap();
       }
 
@@ -294,8 +321,10 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
    * 地図データをキャンバスに描画する
    */
   private drawMap(): void {
-    const data = this.mapData();
-    if (!data || !this.context) return;
+    const mapData = this.mapData();
+    const roadData = this.roadData();
+    const roadPopup = this.roadPopup();
+    if (!this.context || (!mapData && !roadData)) return;
 
     const canvas = this.mapCanvasRef.nativeElement;
     const ctx = this.context;
@@ -306,8 +335,20 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     // 現在の変換情報を取得
     const currentTransform = this.transform();
 
-    // GeoJSONの描画
-    this.drawGeoJSONWithTransform(data, ctx, canvas, currentTransform);
+    // 世界地図の描画（あれば）
+    if (mapData) {
+      this.drawGeoJSONWithTransform(mapData, ctx, canvas, currentTransform);
+    }
+
+    // 道路データの描画（あれば）
+    if (roadData) {
+      this.drawRoadGeoJSON(roadData, ctx, currentTransform);
+    }
+
+    // 吹き出しの描画（あれば）
+    if (roadPopup) {
+      this.drawRoadPopup(roadPopup, ctx);
+    }
   }
 
   /**
@@ -372,15 +413,107 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
         case 'MultiPolygon':
           this.drawMultiPolygon(feature.geometry.coordinates, ctx, scale, offsetX, offsetY);
           break;
+        case 'LineString':
+          this.drawLineString(feature.geometry.coordinates, ctx, scale, offsetX, offsetY);
+          break;
+        case 'MultiLineString':
+          this.drawMultiLineString(feature.geometry.coordinates, ctx, scale, offsetX, offsetY);
+          break;
         // 他の形状が必要な場合はここに追加
       }
 
-      // 塗りつぶしと線
-      ctx.fillStyle = MAP_VIEW_CONSTANTS.POLYGON_FILL_COLOR;
-      ctx.strokeStyle = MAP_VIEW_CONSTANTS.POLYGON_STROKE_COLOR;
-      ctx.lineWidth = MAP_VIEW_CONSTANTS.POLYGON_LINE_WIDTH;
-      ctx.fill();
+      // 形状によって描画スタイルを変える
+      if (feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString') {
+        // 線のスタイル
+        ctx.strokeStyle = MAP_VIEW_CONSTANTS.LINE_STROKE_COLOR;
+        ctx.lineWidth = MAP_VIEW_CONSTANTS.LINE_WIDTH;
+        ctx.stroke();
+      } else {
+        // ポリゴンのスタイル
+        ctx.fillStyle = MAP_VIEW_CONSTANTS.POLYGON_FILL_COLOR;
+        ctx.strokeStyle = MAP_VIEW_CONSTANTS.POLYGON_STROKE_COLOR;
+        ctx.lineWidth = MAP_VIEW_CONSTANTS.POLYGON_LINE_WIDTH;
+        ctx.fill();
+        ctx.stroke();
+      }
+    });
+  }
+
+  /**
+   * 道路GeoJSONデータを描画する
+   */
+  private drawRoadGeoJSON(
+    roadData: FeatureCollection,
+    ctx: CanvasRenderingContext2D,
+    transform: MapTransform
+  ): void {
+    const scale = transform.scale;
+    const offsetX = transform.offsetX;
+    const offsetY = transform.offsetY;
+
+    // 各フィーチャーを描画
+    roadData.features.forEach(feature => {
+      if (!feature.geometry) return;
+
+      ctx.beginPath();
+
+      switch (feature.geometry.type) {
+        case 'LineString':
+          this.drawLineString(feature.geometry.coordinates, ctx, scale, offsetX, offsetY);
+          break;
+        case 'MultiLineString':
+          this.drawMultiLineString(feature.geometry.coordinates, ctx, scale, offsetX, offsetY);
+          break;
+      }
+
+      // 道路線のスタイル
+      ctx.strokeStyle = MAP_VIEW_CONSTANTS.LINE_STROKE_COLOR;
+      ctx.lineWidth = MAP_VIEW_CONSTANTS.LINE_WIDTH;
       ctx.stroke();
+    });
+  }
+
+  /**
+   * LineStringを描画する
+   */
+  private drawLineString(
+    coordinates: Position[],
+    ctx: CanvasRenderingContext2D,
+    scale: number,
+    offsetX: number,
+    offsetY: number
+  ): void {
+    if (coordinates.length === 0) return;
+
+    // 最初の点に移動
+    const firstPoint = coordinates[0];
+    if (!firstPoint) return;
+
+    const start = this.projectPoint(firstPoint, scale, offsetX, offsetY);
+    ctx.moveTo(start.x, start.y);
+
+    // 残りの点をつなぐ
+    for (let i = 1; i < coordinates.length; i++) {
+      const pointCoord = coordinates[i];
+      if (!pointCoord) continue;
+
+      const point = this.projectPoint(pointCoord, scale, offsetX, offsetY);
+      ctx.lineTo(point.x, point.y);
+    }
+  }
+
+  /**
+   * MultiLineStringを描画する
+   */
+  private drawMultiLineString(
+    coordinates: Position[][],
+    ctx: CanvasRenderingContext2D,
+    scale: number,
+    offsetX: number,
+    offsetY: number
+  ): void {
+    coordinates.forEach(lineString => {
+      this.drawLineString(lineString, ctx, scale, offsetX, offsetY);
     });
   }
 
@@ -474,6 +607,14 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
       maxY = Math.max(maxY, y);
     };
 
+    const processLineString = (coordinates: Position[]): void => {
+      coordinates.forEach(processPosition);
+    };
+
+    const processMultiLineString = (coordinates: Position[][]): void => {
+      coordinates.forEach(processLineString);
+    };
+
     const processPolygon = (coordinates: Position[][]): void => {
       coordinates.forEach(ring => {
         ring.forEach(processPosition);
@@ -488,6 +629,12 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
       if (!feature.geometry) return;
 
       switch (feature.geometry.type) {
+        case 'LineString':
+          processLineString(feature.geometry.coordinates);
+          break;
+        case 'MultiLineString':
+          processMultiLineString(feature.geometry.coordinates);
+          break;
         case 'Polygon':
           processPolygon(feature.geometry.coordinates);
           break;
@@ -499,5 +646,78 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     });
 
     return minX === Infinity ? null : { minX, minY, maxX, maxY };
+  }
+
+  /**
+   * 道路名吹き出しを描画
+   * @param popup 吹き出し情報
+   * @param ctx キャンバスコンテキスト
+   */
+  private drawRoadPopup(popup: RoadPopup, ctx: CanvasRenderingContext2D): void {
+    const { x, y, roadName } = popup;
+
+    // 吹き出しの設定
+    const padding = 10;
+    const borderRadius = 5;
+    const arrowHeight = 10;
+    const arrowWidth = 15;
+    const fontSize = 14;
+    ctx.font = `${fontSize}px Arial, sans-serif`;
+
+    // テキスト測定
+    const textMetrics = ctx.measureText(roadName);
+    const textWidth = textMetrics.width;
+    const textHeight = fontSize;
+
+    // 吹き出しのサイズと位置計算
+    const boxWidth = textWidth + padding * 2;
+    const boxHeight = textHeight + padding * 2;
+    const boxX = x - boxWidth / 2;
+    const boxY = y - boxHeight - arrowHeight - 5; // 少し上に表示
+
+    // 背景を描画（吹き出し本体）
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.lineWidth = 1;
+
+    // 吹き出しの枠（角丸四角形）
+    ctx.beginPath();
+    ctx.moveTo(boxX + borderRadius, boxY);
+    ctx.lineTo(boxX + boxWidth - borderRadius, boxY);
+    ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + borderRadius);
+    ctx.lineTo(boxX + boxWidth, boxY + boxHeight - borderRadius);
+    ctx.quadraticCurveTo(
+      boxX + boxWidth,
+      boxY + boxHeight,
+      boxX + boxWidth - borderRadius,
+      boxY + boxHeight
+    );
+
+    // 吹き出しの矢印部分（右半分）
+    const arrowTipX = x;
+    const arrowBaseRightX = x + arrowWidth / 2;
+    const arrowBaseY = boxY + boxHeight;
+    ctx.lineTo(arrowBaseRightX, arrowBaseY);
+    ctx.lineTo(arrowTipX, arrowBaseY + arrowHeight);
+
+    // 吹き出しの矢印部分（左半分）
+    const arrowBaseLeftX = x - arrowWidth / 2;
+    ctx.lineTo(arrowBaseLeftX, arrowBaseY);
+
+    // 吹き出しの枠（左下から左上まで）
+    ctx.lineTo(boxX + borderRadius, boxY + boxHeight);
+    ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - borderRadius);
+    ctx.lineTo(boxX, boxY + borderRadius);
+    ctx.quadraticCurveTo(boxX, boxY, boxX + borderRadius, boxY);
+
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // テキスト描画
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(roadName, x, boxY + boxHeight / 2);
   }
 }

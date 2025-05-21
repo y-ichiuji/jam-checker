@@ -8,6 +8,7 @@ import {
   ZoomEvent,
   createInitialTransform,
 } from '../../../models/map-transform.model';
+import { RoadPopup } from '../../../models/road-popup.model';
 import { MapService } from '../../../services/map.service';
 import { CanvasInfo, MapViewComponent } from '../../presentation/map-view/map-view.component';
 
@@ -55,6 +56,7 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
 
   // 状態管理のためのシグナル
   private readonly mapDataSignal = signal<FeatureCollection | null>(null);
+  private readonly roadDataSignal = signal<FeatureCollection | null>(null);
   private readonly loadingSignal = signal<boolean>(false);
   private readonly errorSignal = signal<string | null>(null);
   private readonly mapTransformSignal = signal<MapTransform>(createInitialTransform());
@@ -64,13 +66,18 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
     height: MAP_CONTAINER_CONSTANTS.DEFAULT_CANVAS_HEIGHT,
   }); // デフォルト値
 
+  // 道路の吹き出し情報を管理するシグナル
+  private readonly roadPopupSignal = signal<RoadPopup | null>(null);
+
   // 公開用の読み取り専用シグナル
   protected readonly mapData = this.mapDataSignal.asReadonly();
+  protected readonly roadData = this.roadDataSignal.asReadonly();
   protected readonly loading = this.loadingSignal.asReadonly();
   protected readonly error = this.errorSignal.asReadonly();
   protected readonly mapTransform = this.mapTransformSignal.asReadonly();
   protected readonly mapBounds = this.mapBoundsSignal.asReadonly();
   protected readonly canvasInfo = this.canvasInfoSignal.asReadonly();
+  protected readonly roadPopup = this.roadPopupSignal.asReadonly();
 
   /**
    * キャンバス情報変更イベントを処理する
@@ -85,6 +92,10 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
   ngOnInit(): void {
     // コンポーネント初期化時に地図データを取得
     this.loadMapData();
+
+    // 道路データを取得
+    this.loadRoadData();
+
     // 現在位置を取得する
     this.getCurrentLocation();
   }
@@ -110,14 +121,51 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
     }
   }
 
+  /**
+   * 道路データを読み込む
+   */
+  protected async loadRoadData(): Promise<void> {
+    try {
+      // 道路データの取得中はloadingSignalをtrueにしない（世界地図の読み込み中に表示するため）
+      // MapServiceからデータを取得
+      const data = await this.mapService.fetchRoadData();
+      this.roadDataSignal.set(data);
+    } catch (error) {
+      console.error('道路データの取得に失敗しました', error);
+      // エラーがあっても世界地図の表示には影響させない
+    }
+  }
+
+  /**
+   * マップクリックイベントのハンドラ
+   * クリック位置で道路データが存在するか確認し、あれば吹き出しを表示
+   */
   protected handleMapClick(event: { x: number; y: number }): void {
-    console.log('Map clicked at:', event);
+    // クリック位置にある道路を検出
+    const clickedRoad = this.findRoadAtPosition(event);
+
+    if (clickedRoad) {
+      // 道路が見つかった場合、吹き出しを表示
+      const roadName = clickedRoad.properties?.['N12_004'] || '道路名不明';
+      this.roadPopupSignal.set({
+        x: event.x,
+        y: event.y,
+        roadName: roadName,
+        properties: clickedRoad.properties,
+      });
+    } else {
+      // 道路が見つからない場合、吹き出しをクリア
+      this.roadPopupSignal.set(null);
+    }
   }
 
   /**
    * パン操作イベントをハンドリング
    */
   protected handlePan(event: PanEvent): void {
+    // パン操作時に吹き出しをクリア
+    this.clearRoadPopup();
+
     // 移動量の累積を追跡するための値
     let accumulatedDeltaX = 0;
     let accumulatedDeltaY = 0;
@@ -161,6 +209,9 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
    * ズーム操作イベントをハンドリング
    */
   protected handleZoom(event: ZoomEvent): void {
+    // ズーム操作時に吹き出しをクリア
+    this.clearRoadPopup();
+
     this.mapTransformSignal.update(transform => {
       // 新しいスケールを計算（最小・最大の制限内に収める）
       // 最小スケールは createInitialTransform() で設定された値と
@@ -364,5 +415,123 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
   private forceMapRedraw(): void {
     // 変換情報の更新と制限の更新
     this.updateTransformLimits();
+  }
+
+  /**
+   * 指定された位置にある道路を検出する
+   * @param position クリック位置（キャンバス座標）
+   * @returns クリック位置にある道路のFeature、なければnull
+   */
+  private findRoadAtPosition(position: { x: number; y: number }): any | null {
+    const roadData = this.roadDataSignal();
+    if (!roadData?.features?.length) {
+      return null;
+    }
+
+    const transform = this.mapTransformSignal();
+
+    // クリック位置をマップ座標に変換（逆変換）
+    const mapX = (position.x - transform.offsetX) / transform.scale;
+    const mapY = 90 - (position.y - transform.offsetY) / transform.scale;
+
+    // クリック検出の許容距離を計算
+    // 固定ピクセルサイズ（画面上の感覚）を保つため、基本値は大きくし、最小値も設定する
+    const baseHitDistance = 5; // 基本値を5ピクセルに設定
+    const minHitDistance = 0.05; // 最小ヒット距離（地図座標系）
+    const hitDistance = Math.max(minHitDistance, baseHitDistance / transform.scale); // スケールに応じて調整し、最小値を確保
+
+    let d = Infinity;
+    // 道路データからクリックされた道路を検索
+    for (const feature of roadData.features) {
+      if (feature.geometry?.type === 'LineString') {
+        const coordinates = feature.geometry.coordinates as number[][];
+
+        // LineStringの各セグメント（隣接する2点）について距離をチェック
+        for (let i = 0; i < coordinates.length - 1; i++) {
+          const p1 = coordinates[i];
+          const p2 = coordinates[i + 1];
+
+          if (
+            !p1 ||
+            !p1[0] ||
+            !p1[1] ||
+            !p2 ||
+            !p2[0] ||
+            !p2[1] ||
+            p1.length < 2 ||
+            p2.length < 2
+          ) {
+            continue;
+          }
+
+          // 点と線分の距離を計算
+          const distance = this.distanceToLineSegment(mapX, mapY, p1[0], p1[1], p2[0], p2[1]);
+          d = Math.min(d, distance);
+
+          if (distance < hitDistance) {
+            return feature;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 点と線分の距離を計算
+   * @param px 点のX座標
+   * @param py 点のY座標
+   * @param x1 線分始点のX座標
+   * @param y1 線分始点のY座標
+   * @param x2 線分終点のX座標
+   * @param y2 線分終点のY座標
+   * @returns 点から線分への最短距離
+   */
+  private distanceToLineSegment(
+    px: number,
+    py: number,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number
+  ): number {
+    const A = px - x1;
+    const B = py - y1;
+    const C = x2 - x1;
+    const D = y2 - y1;
+
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+    let param = -1;
+
+    if (lenSq !== 0) {
+      param = dot / lenSq;
+    }
+
+    let xx, yy;
+
+    if (param < 0) {
+      xx = x1;
+      yy = y1;
+    } else if (param > 1) {
+      xx = x2;
+      yy = y2;
+    } else {
+      xx = x1 + param * C;
+      yy = y1 + param * D;
+    }
+
+    const dx = px - xx;
+    const dy = py - yy;
+
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  /**
+   * 吹き出しをクリアする
+   */
+  private clearRoadPopup(): void {
+    this.roadPopupSignal.set(null);
   }
 }
