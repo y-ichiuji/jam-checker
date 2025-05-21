@@ -17,6 +17,12 @@ export interface MapTransform {
 
   /** 最大拡大率 */
   maxScale: number;
+
+  /** X軸方向の最大オフセット（+ 右方向, - 左方向）*/
+  maxOffsetX: number;
+
+  /** Y軸方向の最大オフセット（+ 下方向, - 上方向）*/
+  maxOffsetY: number;
 }
 
 /**
@@ -80,7 +86,9 @@ export function createInitialTransform(): MapTransform {
     scale: 1,
     offsetX: 0,
     offsetY: 0,
-    minScale: 0.5,
-    maxScale: 5,
+    minScale: 2.5, // 最小値を2.5に設定（世界地図が表示できるレベル）
+    maxScale: 5000,
+    maxOffsetX: 2000,
+    maxOffsetY: 1500,
   };
 }

@@ -18,7 +18,7 @@
 3. **マップ表示機能**:
    - マップコンポーネント（Presentational/Container）の基本実装
    - ResizeObserverを使用した効率的なキャンバスリサイズ処理
-   - GeoJSONデータを使用した日本地図の表示
+   - GeoJSONデータを使用した世界地図の表示
    - マップの基本操作（ズーム、パン、リセット）の実装
    - Presentational/Containerパターンに基づく適切な状態管理の実装
 

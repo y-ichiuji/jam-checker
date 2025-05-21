@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { AfterViewInit, Component, OnInit, inject, signal } from '@angular/core';
 
 import { FeatureCollection } from '../../../../../models/geojson.model';
 import {
@@ -18,7 +18,7 @@ import { MapViewComponent } from '../../presentation/map-view/map-view.component
   templateUrl: './map-container.component.html',
   styles: ``,
 })
-export class MapContainerComponent implements OnInit {
+export class MapContainerComponent implements OnInit, AfterViewInit {
   private mapService = inject(MapService);
 
   // 状態管理のためのシグナル
@@ -35,20 +35,14 @@ export class MapContainerComponent implements OnInit {
   protected readonly mapTransform = this.mapTransformSignal.asReadonly();
   protected readonly mapBounds = this.mapBoundsSignal.asReadonly();
 
-  // 変換情報が変更されたかどうかを計算するシグナル
-  protected readonly hasTransformChanged = computed(() => {
-    const transform = this.mapTransformSignal();
-    const initialTransform = createInitialTransform();
-    return (
-      transform.scale !== initialTransform.scale ||
-      transform.offsetX !== initialTransform.offsetX ||
-      transform.offsetY !== initialTransform.offsetY
-    );
-  });
-
   ngOnInit(): void {
     // コンポーネント初期化時に地図データを取得
     this.loadMapData();
+  }
+
+  ngAfterViewInit(): void {
+    // DOMが描画された後に変換制限を設定
+    this.updateTransformLimits();
   }
 
   protected async loadMapData(): Promise<void> {
@@ -75,11 +69,40 @@ export class MapContainerComponent implements OnInit {
    * パン操作イベントをハンドリング
    */
   protected handlePan(event: PanEvent): void {
-    this.mapTransformSignal.update(transform => ({
-      ...transform,
-      offsetX: transform.offsetX + event.deltaX,
-      offsetY: transform.offsetY + event.deltaY,
-    }));
+    // 移動量の累積を追跡するための値
+    let accumulatedDeltaX = 0;
+    let accumulatedDeltaY = 0;
+
+    this.mapTransformSignal.update(transform => {
+      // 新しいオフセットを計算（移動累積量を追加）
+      const newOffsetX = transform.offsetX + event.deltaX;
+      const newOffsetY = transform.offsetY + event.deltaY;
+
+      // 移動量を累積
+      accumulatedDeltaX += event.deltaX;
+      accumulatedDeltaY += event.deltaY;
+
+      // 制限内に収める
+      const constrainedOffsetX = Math.max(
+        -transform.maxOffsetX,
+        Math.min(transform.maxOffsetX, newOffsetX)
+      );
+      const constrainedOffsetY = Math.max(
+        -transform.maxOffsetY,
+        Math.min(transform.maxOffsetY, newOffsetY)
+      );
+
+      return {
+        ...transform,
+        offsetX: constrainedOffsetX,
+        offsetY: constrainedOffsetY,
+      };
+    });
+
+    // 大きな移動の後に変換制限を更新
+    if (Math.abs(accumulatedDeltaX) > 50 || Math.abs(accumulatedDeltaY) > 50) {
+      this.updateTransformLimits();
+    }
   }
 
   /**
@@ -99,13 +122,52 @@ export class MapContainerComponent implements OnInit {
       const offsetX = event.centerX - (event.centerX - transform.offsetX) * scaleFactor;
       const offsetY = event.centerY - (event.centerY - transform.offsetY) * scaleFactor;
 
+      // オフセットを制限内に収める
+      const constrainedOffsetX = Math.max(
+        -transform.maxOffsetX,
+        Math.min(transform.maxOffsetX, offsetX)
+      );
+      const constrainedOffsetY = Math.max(
+        -transform.maxOffsetY,
+        Math.min(transform.maxOffsetY, offsetY)
+      );
+
       return {
         ...transform,
         scale: newScale,
-        offsetX,
-        offsetY,
+        offsetX: constrainedOffsetX,
+        offsetY: constrainedOffsetY,
       };
     });
+
+    // ズーム操作後に変換制限を更新
+    this.updateTransformLimits();
+  }
+
+  /**
+   * 変換制限を更新する
+   * キャンバスサイズとスケールに基づいて動的に最大オフセットを計算
+   */
+  private updateTransformLimits(): void {
+    const canvasElement = document.querySelector('canvas');
+    let canvasWidth = 1000; // デフォルト値
+    let canvasHeight = 800; // デフォルト値
+
+    if (canvasElement) {
+      canvasWidth = canvasElement.width || canvasWidth;
+      canvasHeight = canvasElement.height || canvasHeight;
+    }
+
+    const currentScale = this.mapTransformSignal().scale;
+    // スケールに応じて制限を調整（より大きいスケールではより大きい移動を許可）
+    const maxOffsetX = Math.max(500, canvasWidth * 0.6 * currentScale);
+    const maxOffsetY = Math.max(500, canvasHeight * 0.6 * currentScale);
+
+    this.mapTransformSignal.update(transform => ({
+      ...transform,
+      maxOffsetX,
+      maxOffsetY,
+    }));
   }
 
   /**
@@ -121,9 +183,20 @@ export class MapContainerComponent implements OnInit {
   }
 
   /**
+   * 初期変換情報を処理する
+   * MapViewComponentから送信された初期スケールとオフセットを適用
+   */
+  protected handleInitialTransformChange(transform: MapTransform): void {
+    this.mapTransformSignal.set(transform);
+    // 変換制限も更新
+    this.updateTransformLimits();
+  }
+
+  /**
    * 地図の変換情報をリセット
    */
   protected resetMapTransform(): void {
     this.mapTransformSignal.set(createInitialTransform());
+    this.updateTransformLimits();
   }
 }
