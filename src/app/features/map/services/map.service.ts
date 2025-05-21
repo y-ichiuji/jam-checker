@@ -39,7 +39,7 @@ export class MapService {
 
       // 非同期でGeoJSONファイルを取得
       const data = await firstValueFrom(
-        this.http.get<FeatureCollection>('geojson/japan-map.geojson')
+        this.http.get<FeatureCollection>('geojson/world-map.geojson')
       );
 
       // データを更新

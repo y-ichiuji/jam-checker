@@ -39,12 +39,9 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
   readonly retryLoad = output<void>();
 
   private context: CanvasRenderingContext2D | null = null;
-  private boundMapDataChanged: () => void;
+  private resizeObserver: ResizeObserver | null = null;
 
   constructor() {
-    // thisをバインド
-    this.boundMapDataChanged = this.drawMap.bind(this);
-
     // 地図データの変更を監視
     effect(() => {
       const data = this.mapData();
@@ -59,8 +56,10 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // リサイズイベントのリスナーを削除
-    window.removeEventListener('resize', this.resizeCanvas.bind(this));
+    // ResizeObserverの監視を解除
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+    }
   }
 
   private initializeCanvas(): void {
@@ -70,8 +69,15 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     // キャンバスのサイズを設定
     this.resizeCanvas();
 
-    // リサイズイベントのリスナー設定
-    window.addEventListener('resize', this.resizeCanvas.bind(this));
+    // ResizeObserverを設定
+    this.resizeObserver = new ResizeObserver(() => {
+      this.resizeCanvas();
+    });
+
+    // キャンバスの親要素を監視
+    if (canvas.parentElement) {
+      this.resizeObserver.observe(canvas.parentElement);
+    }
   }
 
   private resizeCanvas(): void {
@@ -83,6 +89,11 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     if (parent) {
       canvas.width = parent.clientWidth;
       canvas.height = parent.clientHeight;
+
+      // サイズ変更後に地図を再描画
+      if (this.mapData()) {
+        this.drawMap();
+      }
     }
   }
 
