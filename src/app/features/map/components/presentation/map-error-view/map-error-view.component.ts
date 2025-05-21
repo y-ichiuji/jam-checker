@@ -1,7 +1,7 @@
 import { Component, input, output } from '@angular/core';
 
 @Component({
-  selector: 'app-error-view',
+  selector: 'app-map-error-view',
   standalone: true,
   templateUrl: './map-error-view.component.html',
 })

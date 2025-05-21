@@ -6,10 +6,10 @@
 
   <!-- エラー表示 -->
   @if (error()) {
-    <app-error-view
+    <app-map-error-view
       [message]="error() || '地図データの取得に失敗しました'"
       (retry)="retryLoad.emit()"
-    ></app-error-view>
+    ></app-map-error-view>
   }
 
   <canvas #mapCanvas class="w-full h-full"></canvas>
