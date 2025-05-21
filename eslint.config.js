@@ -53,25 +53,8 @@ export default [
           varsIgnorePattern: '^_',
         },
       ],
-      'import/order': [
-        'error',
-        {
-          alphabetize: {
-            order: 'asc',
-            caseInsensitive: true,
-          },
-          groups: ['builtin', 'external', 'internal', ['parent', 'sibling', 'index']],
-          'newlines-between': 'always',
-          pathGroups: [
-            {
-              pattern: '@angular/**',
-              group: 'external',
-              position: 'before',
-            },
-          ],
-          pathGroupsExcludedImportTypes: ['@angular/**'],
-        },
-      ],
+      // 'import/order'ルールを無効化（prettierによるフォーマットと競合するため）
+      'import/order': 'off',
       'prettier/prettier': 'error',
     },
   },

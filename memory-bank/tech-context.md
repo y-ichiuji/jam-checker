@@ -263,3 +263,32 @@ AppComponent
 ng build --stats-json
 npx webpack-bundle-analyzer dist/stats.json
 ```
+
+## Canvas関連の技術情報
+
+### Canvas APIの特性
+
+- **サイズ変更の挙動**: Canvas要素のwidth/heightプロパティを変更すると、内部バッファが再初期化され描画内容が消去される
+- **パフォーマンス考慮事項**:
+  - 大量の描画要素がある場合はオフスクリーンレンダリングを検討
+  - ライブラリ（例：Konva.js, Fabric.js）の使用を検討
+
+### ResizeObserverの活用
+
+- **効率的なリサイズ検出**: windowのresizeイベントよりも効率的
+- **ターゲット要素の監視**: 特定の要素のサイズ変更のみに反応
+- **実装パターン**:
+
+  ```typescript
+  private resizeObserver = new ResizeObserver((entries) => {
+    this.handleResize();
+  });
+
+  // 要素の監視開始
+  this.resizeObserver.observe(element);
+
+  // コンポーネント破棄時に監視解除
+  ngOnDestroy() {
+    this.resizeObserver.disconnect();
+  }
+  ```

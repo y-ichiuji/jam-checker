@@ -46,3 +46,57 @@
 - **Prettier**: コードフォーマットの自動適用
 - **テスト**: Jasmine/Karma を使用した単体テスト
 - **カバレッジ**: 最低80%のコードカバレッジを目標
+
+## プロジェクト構造
+
+```
+src/
+|-- app/
+|   |-- core/                          # コアモジュール
+|   |   |-- guards/                    # ルートガード
+|   |   |-- interceptors/              # HTTPインターセプター
+|   |   |-- directives/                # 共通ディレクティブ
+|   |   |-- pipes/                     # 共通パイプ
+|   |
+|   |-- store/                         # グローバル状態管理
+|   |   |-- hoge.store.ts              # hoge関連の状態
+|   |
+|   |-- components/                    # 共有コンポーネント
+|   |   |-- ui/                        # 再利用可能なUIコンポーネント
+|   |   |   |-- button/                # ボタンコンポーネント
+|   |   |   |-- card/                  # カードコンポーネント
+|   |   |   |-- loading/               # ローディングインジケーター
+|   |   |
+|   |   |-- layout/                    # レイアウトコンポーネント
+|   |       |-- header/                # ヘッダーコンポーネント
+|   |       |-- footer/                # フッターコンポーネント
+|   |       |-- sidebar/               # サイドバーコンポーネント
+|   |
+|   |-- features/                      # 機能モジュール
+|   |   |-- hoge-fuga/                 # hoge-fuga機能
+|   |   |   |-- components/            # 機能固有のUIコンポーネント
+|   |   |   |   |-- presentational/    # Presentationalコンポーネント
+|   |   |   |   |   |-- fuga-view/     # fugaビューコンポーネント
+|   |   |   |   |   |-- piyo-selector/ # piyo選択コンポーネント
+|   |   |   |   |
+|   |   |   |   |-- container/         # Containerコンポーネント
+|   |   |   |       |-- hoge-fuga/     # hoge-fugaコンポーネント
+|   |   |   |
+|   |   |   |-- services/              # 機能固有のサービス
+|   |   |   |-- models/                # 機能固有のモデル
+|   |
+|   |-- models/                        # データモデル/インターフェース
+|   |   |-- hoge.model.ts              # hogeデータモデル
+|   |
+|   |-- services/                      # グローバルサービス
+|   |   |-- hoge.service.ts       # hogeデータサービス
+|   |
+|   |-- utils/                         # ユーティリティ関数
+|       |-- date-formatter.util.ts     # 日付フォーマット
+|       |-- common-utils.ts            # 共通ユーティリティ
+|
+|-- public/                            # 静的アセット
+|   |-- images/                        # 画像ファイル
+|   |-- icons/                         # アイコン
+|   |-- data/                          # データファイル
+```
