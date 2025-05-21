@@ -9,7 +9,7 @@ import {
   output,
 } from '@angular/core';
 import { Subscription, fromEvent, merge } from 'rxjs';
-import { filter, map, switchMap, takeUntil } from 'rxjs/operators';
+import { filter, map, switchMap, takeUntil, tap, throttleTime } from 'rxjs/operators';
 
 import { LoadingViewComponent } from '../../../../../components/ui/loading-view/loading-view.component';
 import { FeatureCollection, Position } from '../../../../../models/geojson.model';
@@ -21,6 +21,38 @@ import {
   createInitialTransform,
 } from '../../../models/map-transform.model';
 import { MapErrorViewComponent } from '../map-error-view/map-error-view.component';
+
+/**
+ * MapView内で使用する定数
+ */
+const MAP_VIEW_CONSTANTS = {
+  /** ズーム処理のスムージング係数（0.1 = 10%ずつ） */
+  ZOOM_FACTOR: 0.1,
+  /** マップの横方向の余白率（0.95 = 95%表示） */
+  MAP_WIDTH_SCALE_FACTOR: 0.95,
+  /** マップの縦方向の余白率（0.85 = 85%表示） */
+  MAP_HEIGHT_SCALE_FACTOR: 0.85,
+  /** 最小スケール計算係数（0.9 = 自動計算した90%） */
+  MIN_SCALE_FACTOR: 0.9,
+  /** Y軸方向の上下オフセット調整係数（0.1 = 画面高さの10%） */
+  Y_OFFSET_ADJUSTMENT: 0.1,
+  /** ポインターイベントの間引き時間（ミリ秒、16ms ≒ 60fps） */
+  POINTER_THROTTLE_MS: 16,
+  /** ポリゴン描画の線幅 */
+  POLYGON_LINE_WIDTH: 0.8,
+  /** ポリゴン塗りつぶし色 */
+  POLYGON_FILL_COLOR: 'rgba(230, 245, 255, 0.8)',
+  /** ポリゴン線の色 */
+  POLYGON_STROKE_COLOR: 'rgba(50, 120, 180, 0.9)',
+  /** 緯度原点のオフセット（北緯90度） */
+  LATITUDE_OFFSET: 90,
+};
+
+// canvasサイズ情報のインターフェース
+export interface CanvasInfo {
+  width: number;
+  height: number;
+}
 
 @Component({
   selector: 'app-map-view',
@@ -60,6 +92,9 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
 
   // 出力シグナル - 初期変換情報を発信（自動スケーリング後）
   readonly initialTransformChange = output<MapTransform>();
+
+  // 出力シグナル - キャンバス情報を親コンポーネントに発信
+  readonly canvasInfoChange = output<CanvasInfo>();
 
   private context: CanvasRenderingContext2D | null = null;
   private resizeObserver: ResizeObserver | null = null;
@@ -141,6 +176,9 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
       if (this.mapData()) {
         this.drawMap();
       }
+
+      // キャンバス情報を発信
+      this.canvasInfoChange.emit({ width: canvas.width, height: canvas.height });
     }
   }
 
@@ -155,7 +193,7 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     this.subscriptions.add(
       fromEvent<WheelEvent>(canvas, 'wheel')
         .pipe(
-          filter(event => {
+          tap(event => {
             event.preventDefault();
             return true;
           }),
@@ -167,7 +205,7 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
 
             // ズーム量の計算（正: 拡大、負: 縮小）
             const zoomDirection = event.deltaY < 0 ? 1 : -1;
-            const zoomFactor = 1 + zoomDirection * 0.1; // 10%ずつ拡大/縮小
+            const zoomFactor = 1 + zoomDirection * MAP_VIEW_CONSTANTS.ZOOM_FACTOR;
 
             return {
               deltaScale: zoomFactor,
@@ -185,7 +223,7 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     this.subscriptions.add(
       fromEvent<PointerEvent>(canvas, 'pointerdown')
         .pipe(
-          filter(event => {
+          tap(event => {
             event.preventDefault();
             // タッチ操作の時は特に必要
             canvas.setPointerCapture(event.pointerId);
@@ -194,6 +232,8 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
           }),
           switchMap(() =>
             fromEvent<PointerEvent>(canvas, 'pointermove').pipe(
+              // 高頻度のイベントを間引く
+              throttleTime(MAP_VIEW_CONSTANTS.POINTER_THROTTLE_MS),
               // pointerup または pointercancel で終了
               takeUntil(
                 merge(
@@ -292,17 +332,22 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     if (scale === 1 && offsetX === 0 && offsetY === 0) {
       // 通常の自動スケーリング（全体表示）
       // 縮尺の計算（キャンバスに合わせる）
-      const scaleX = (canvas.width / (bounds.maxX - bounds.minX)) * 0.95;
-      const scaleY = (canvas.height / (bounds.maxY - bounds.minY)) * 0.85;
+      const scaleX =
+        (canvas.width / (bounds.maxX - bounds.minX)) * MAP_VIEW_CONSTANTS.MAP_WIDTH_SCALE_FACTOR;
+      const scaleY =
+        (canvas.height / (bounds.maxY - bounds.minY)) * MAP_VIEW_CONSTANTS.MAP_HEIGHT_SCALE_FACTOR;
       scale = Math.min(scaleX, scaleY); // 小さい方を採用して縦横比を保持
 
       // 中心位置の調整
       offsetX = canvas.width / 2 - ((bounds.maxX + bounds.minX) / 2) * scale;
       // 世界地図は画面中央よりやや上に配置
-      offsetY = canvas.height / 2 - ((bounds.maxY + bounds.minY) / 2) * scale - canvas.height * 0.1;
+      offsetY =
+        canvas.height / 2 -
+        ((bounds.maxY + bounds.minY) / 2) * scale -
+        canvas.height * MAP_VIEW_CONSTANTS.Y_OFFSET_ADJUSTMENT;
 
       // 最小スケールは自動計算されたスケールの90%に設定（全体が見えるように）
-      const calculatedMinScale = scale * 0.9;
+      const calculatedMinScale = scale * MAP_VIEW_CONSTANTS.MIN_SCALE_FACTOR;
 
       // 親コンポーネントに初期変換情報を通知
       this.initialTransformChange.emit({
@@ -331,9 +376,9 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
       }
 
       // 塗りつぶしと線
-      ctx.fillStyle = 'rgba(230, 245, 255, 0.8)'; // 薄い水色
-      ctx.strokeStyle = 'rgba(50, 120, 180, 0.9)'; // 暗めの青
-      ctx.lineWidth = 0.8;
+      ctx.fillStyle = MAP_VIEW_CONSTANTS.POLYGON_FILL_COLOR;
+      ctx.strokeStyle = MAP_VIEW_CONSTANTS.POLYGON_STROKE_COLOR;
+      ctx.lineWidth = MAP_VIEW_CONSTANTS.POLYGON_LINE_WIDTH;
       ctx.fill();
       ctx.stroke();
     });
@@ -405,7 +450,7 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     // canvas座標系は左上が原点で、右下に向かって増加する
     return {
       x: longitude * scale + offsetX,
-      y: (90 - latitude) * scale + offsetY, // 緯度は90から引く（北半球の場合）
+      y: (MAP_VIEW_CONSTANTS.LATITUDE_OFFSET - latitude) * scale + offsetY, // 緯度は90から引く（北半球の場合）
     };
   }
 

@@ -79,16 +79,36 @@ export interface Point {
 }
 
 /**
+ * 地図変換の定数
+ */
+export const MAP_TRANSFORM_CONSTANTS = {
+  /** 初期スケール値 */
+  INITIAL_SCALE: 1,
+  /** 初期X軸オフセット */
+  INITIAL_OFFSET_X: 0,
+  /** 初期Y軸オフセット */
+  INITIAL_OFFSET_Y: 0,
+  /** 最小拡大率 */
+  MIN_SCALE: 1.0,
+  /** 最大拡大率 */
+  MAX_SCALE: 5000,
+  /** X軸方向の最大オフセット初期値 */
+  INITIAL_MAX_OFFSET_X: 2000,
+  /** Y軸方向の最大オフセット初期値 */
+  INITIAL_MAX_OFFSET_Y: 1500,
+};
+
+/**
  * 地図変換の初期値を生成する関数
  */
 export function createInitialTransform(): MapTransform {
   return {
-    scale: 1,
-    offsetX: 0,
-    offsetY: 0,
-    minScale: 1.0, // 最小値を1.0に設定（より広い範囲を表示できるように）
-    maxScale: 5000,
-    maxOffsetX: 2000,
-    maxOffsetY: 1500,
+    scale: MAP_TRANSFORM_CONSTANTS.INITIAL_SCALE,
+    offsetX: MAP_TRANSFORM_CONSTANTS.INITIAL_OFFSET_X,
+    offsetY: MAP_TRANSFORM_CONSTANTS.INITIAL_OFFSET_Y,
+    minScale: MAP_TRANSFORM_CONSTANTS.MIN_SCALE,
+    maxScale: MAP_TRANSFORM_CONSTANTS.MAX_SCALE,
+    maxOffsetX: MAP_TRANSFORM_CONSTANTS.INITIAL_MAX_OFFSET_X,
+    maxOffsetY: MAP_TRANSFORM_CONSTANTS.INITIAL_MAX_OFFSET_Y,
   };
 }

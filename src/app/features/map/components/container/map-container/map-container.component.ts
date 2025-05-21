@@ -9,7 +9,39 @@ import {
   createInitialTransform,
 } from '../../../models/map-transform.model';
 import { MapService } from '../../../services/map.service';
-import { MapViewComponent } from '../../presentation/map-view/map-view.component';
+import { CanvasInfo, MapViewComponent } from '../../presentation/map-view/map-view.component';
+
+/**
+ * MapContainer内で使用する定数
+ */
+const MAP_CONTAINER_CONSTANTS = {
+  /** デフォルトのキャンバス幅 */
+  DEFAULT_CANVAS_WIDTH: 1000,
+  /** デフォルトのキャンバス高さ */
+  DEFAULT_CANVAS_HEIGHT: 800,
+  /** 大きな移動の閾値（ピクセル） */
+  LARGE_PAN_THRESHOLD: 50,
+  /** 最小スケール */
+  MIN_SCALE: 1.0,
+  /** マックス移動制限の基本値 */
+  BASE_OFFSET_LIMIT: 500,
+  /** キャンバス幅に対するオフセット制限の比率 */
+  CANVAS_WIDTH_OFFSET_RATIO: 0.6,
+  /** キャンバス高さに対するオフセット制限の比率 */
+  CANVAS_HEIGHT_OFFSET_RATIO: 0.6,
+  /** 現在地表示時のスケール */
+  CURRENT_LOCATION_SCALE: 100,
+  /** 再試行の待機時間（ミリ秒） */
+  RETRY_DELAY_MS: 100,
+  /** 位置情報取得の高精度モード */
+  GEO_HIGH_ACCURACY: true,
+  /** 位置情報取得のタイムアウト（ミリ秒） */
+  GEO_TIMEOUT_MS: 10000,
+  /** 位置情報キャッシュの最大有効期間（ミリ秒） */
+  GEO_MAX_AGE_MS: 0,
+  /** 緯度原点のオフセット（北緯90度） */
+  LATITUDE_OFFSET: 90,
+};
 
 @Component({
   selector: 'app-map-container',
@@ -27,6 +59,10 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
   private readonly errorSignal = signal<string | null>(null);
   private readonly mapTransformSignal = signal<MapTransform>(createInitialTransform());
   private readonly mapBoundsSignal = signal<MapBounds | null>(null);
+  private readonly canvasInfoSignal = signal<CanvasInfo>({
+    width: MAP_CONTAINER_CONSTANTS.DEFAULT_CANVAS_WIDTH,
+    height: MAP_CONTAINER_CONSTANTS.DEFAULT_CANVAS_HEIGHT,
+  }); // デフォルト値
 
   // 公開用の読み取り専用シグナル
   protected readonly mapData = this.mapDataSignal.asReadonly();
@@ -34,6 +70,17 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
   protected readonly error = this.errorSignal.asReadonly();
   protected readonly mapTransform = this.mapTransformSignal.asReadonly();
   protected readonly mapBounds = this.mapBoundsSignal.asReadonly();
+  protected readonly canvasInfo = this.canvasInfoSignal.asReadonly();
+
+  /**
+   * キャンバス情報変更イベントを処理する
+   * MapViewComponentから受け取ったキャンバスサイズ情報を保存する
+   */
+  protected handleCanvasInfoChange(info: CanvasInfo): void {
+    this.canvasInfoSignal.set(info);
+    // キャンバスサイズが変わったら変換制限も更新
+    this.updateTransformLimits();
+  }
 
   ngOnInit(): void {
     // コンポーネント初期化時に地図データを取得
@@ -102,7 +149,10 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
     });
 
     // 大きな移動の後に変換制限を更新
-    if (Math.abs(accumulatedDeltaX) > 50 || Math.abs(accumulatedDeltaY) > 50) {
+    if (
+      Math.abs(accumulatedDeltaX) > MAP_CONTAINER_CONSTANTS.LARGE_PAN_THRESHOLD ||
+      Math.abs(accumulatedDeltaY) > MAP_CONTAINER_CONSTANTS.LARGE_PAN_THRESHOLD
+    ) {
       this.updateTransformLimits();
     }
   }
@@ -115,7 +165,7 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
       // 新しいスケールを計算（最小・最大の制限内に収める）
       // 最小スケールは createInitialTransform() で設定された値と
       // setInitialPositionToCurrentLocation で設定された値の小さい方を使用
-      const effectiveMinScale = Math.min(transform.minScale, 1.0); // 最小値として1.0を確保
+      const effectiveMinScale = Math.min(transform.minScale, MAP_CONTAINER_CONSTANTS.MIN_SCALE);
       const newScale = Math.max(
         effectiveMinScale,
         Math.min(transform.maxScale, transform.scale * event.deltaScale)
@@ -154,25 +204,33 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
    * キャンバスサイズとスケールに基づいて動的に最大オフセットを計算
    */
   private updateTransformLimits(): void {
-    const canvasElement = document.querySelector('canvas');
-    let canvasWidth = 1000; // デフォルト値
-    let canvasHeight = 800; // デフォルト値
-
-    if (canvasElement) {
-      canvasWidth = canvasElement.width || canvasWidth;
-      canvasHeight = canvasElement.height || canvasHeight;
-    }
+    // 保存されたキャンバス情報を使用
+    const canvasInfo = this.canvasInfoSignal();
+    const canvasWidth = canvasInfo.width;
+    const canvasHeight = canvasInfo.height;
 
     const currentScale = this.mapTransformSignal().scale;
     // スケールに応じて制限を調整（より大きいスケールではより大きい移動を許可）
-    const maxOffsetX = Math.max(500, canvasWidth * 0.6 * currentScale);
-    const maxOffsetY = Math.max(500, canvasHeight * 0.6 * currentScale);
+    const maxOffsetX = Math.max(
+      MAP_CONTAINER_CONSTANTS.BASE_OFFSET_LIMIT,
+      canvasWidth * MAP_CONTAINER_CONSTANTS.CANVAS_WIDTH_OFFSET_RATIO * currentScale
+    );
+    const maxOffsetY = Math.max(
+      MAP_CONTAINER_CONSTANTS.BASE_OFFSET_LIMIT,
+      canvasHeight * MAP_CONTAINER_CONSTANTS.CANVAS_HEIGHT_OFFSET_RATIO * currentScale
+    );
 
     this.mapTransformSignal.update(transform => ({
       ...transform,
       maxOffsetX,
       maxOffsetY,
     }));
+
+    // キャンバス情報を更新
+    this.canvasInfoSignal.set({ width: canvasWidth, height: canvasHeight });
+
+    // キャンバス情報を更新
+    this.canvasInfoSignal.set({ width: canvasWidth, height: canvasHeight });
   }
 
   /**
@@ -239,9 +297,9 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
         },
         // オプション：タイムアウトを10秒に設定、高精度モードを有効
         {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
+          enableHighAccuracy: MAP_CONTAINER_CONSTANTS.GEO_HIGH_ACCURACY,
+          timeout: MAP_CONTAINER_CONSTANTS.GEO_TIMEOUT_MS,
+          maximumAge: MAP_CONTAINER_CONSTANTS.GEO_MAX_AGE_MS,
         }
       );
     } else {
@@ -257,24 +315,24 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
     // マップデータが読み込まれるのを待つ
     const waitForMapData = (): void => {
       if (this.mapDataSignal()) {
-        // キャンバス要素を取得してサイズを確認
-        const canvasElement = document.querySelector('canvas');
-        if (!canvasElement) {
-          // キャンバスがまだない場合は少し待ってから再試行
-          setTimeout(waitForMapData, 100);
+        // 保存されたキャンバス情報を使用
+        const canvasInfo = this.canvasInfoSignal();
+        if (canvasInfo.width <= 0 || canvasInfo.height <= 0) {
+          // キャンバス情報がまだ有効でない場合は少し待ってから再試行
+          setTimeout(waitForMapData, MAP_CONTAINER_CONSTANTS.RETRY_DELAY_MS);
           return;
         }
 
-        const canvasWidth = canvasElement.width;
-        const canvasHeight = canvasElement.height;
+        const canvasWidth = canvasInfo.width;
+        const canvasHeight = canvasInfo.height;
 
         // スケールの設定（都市レベルの詳細度に適した値）
-        const scale = 100; // 200から100に変更して、初期表示時にもう少し広域を表示
+        const scale = MAP_CONTAINER_CONSTANTS.CURRENT_LOCATION_SCALE;
 
         // 緯度経度を画面座標に変換
         // MapViewComponent.projectPointと同じロジックで変換
         const pointX = longitude * scale;
-        const pointY = (90 - latitude) * scale;
+        const pointY = (MAP_CONTAINER_CONSTANTS.LATITUDE_OFFSET - latitude) * scale;
 
         // 現在地が画面中央に来るようオフセットを計算
         const offsetX = canvasWidth / 2 - pointX;
@@ -286,14 +344,14 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
           offsetX: offsetX,
           offsetY: offsetY,
           // マップ全体の表示できるように最小スケールを小さく設定
-          minScale: 1.0, // 50から1.0に変更して、より縮小表示できるようにする
+          minScale: MAP_CONTAINER_CONSTANTS.MIN_SCALE,
         }));
 
         // マップの再描画をトリガー
         this.forceMapRedraw();
       } else {
         // マップデータがまだ読み込まれていない場合は少し待ってから再試行
-        setTimeout(waitForMapData, 100);
+        setTimeout(waitForMapData, MAP_CONTAINER_CONSTANTS.RETRY_DELAY_MS);
       }
     };
 
