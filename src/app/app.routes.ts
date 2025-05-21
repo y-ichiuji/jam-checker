@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 
-import { MapContainerComponent } from './components/map/container/map-container.component';
+import { MapContainerComponent } from './features/map/components/container/map-container/map-container.component';
 
 export const routes: Routes = [
   {

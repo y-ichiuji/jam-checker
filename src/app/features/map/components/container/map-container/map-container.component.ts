@@ -1,12 +1,12 @@
 import { Component, OnInit, inject } from '@angular/core';
 
 import { MapService } from '../../../services/map.service';
-import { MapPresentationComponent } from '../presentation/map-presentation.component';
+import { MapViewComponent } from '../../presentation/map-view/map-view.component';
 
 @Component({
   selector: 'app-map-container',
   standalone: true,
-  imports: [MapPresentationComponent],
+  imports: [MapViewComponent],
   templateUrl: './map-container.component.html',
   styles: ``,
 })

@@ -1,11 +1,11 @@
 import { Component, input } from '@angular/core';
 
 @Component({
-  selector: 'app-loading-presentation',
+  selector: 'app-loading-view',
   standalone: true,
-  templateUrl: './loading-presentation.component.html',
+  templateUrl: './loading-view.component.html',
 })
-export class LoadingPresentationComponent {
+export class LoadingViewComponent {
   // 表示するメッセージ
   readonly message = input<string>('読み込み中...');
 }

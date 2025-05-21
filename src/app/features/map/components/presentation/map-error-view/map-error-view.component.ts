@@ -1,11 +1,11 @@
 import { Component, input, output } from '@angular/core';
 
 @Component({
-  selector: 'app-error-presentation',
+  selector: 'app-error-view',
   standalone: true,
-  templateUrl: './error-presentation.component.html',
+  templateUrl: './map-error-view.component.html',
 })
-export class ErrorPresentationComponent {
+export class MapErrorViewComponent {
   // エラーメッセージ
   readonly message = input<string>('エラーが発生しました');
 

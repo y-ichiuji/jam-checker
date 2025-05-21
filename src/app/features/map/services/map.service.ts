@@ -3,7 +3,7 @@ import { Injectable, inject, signal } from '@angular/core';
 
 import { firstValueFrom } from 'rxjs';
 
-import { FeatureCollection } from '../models/geojson.model';
+import { FeatureCollection } from '../../../models/geojson.model';
 
 @Injectable({
   providedIn: 'root',

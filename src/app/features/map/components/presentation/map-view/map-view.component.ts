@@ -9,18 +9,18 @@ import {
   output,
 } from '@angular/core';
 
-import { ErrorPresentationComponent } from '../../../components/common/presentation/error-presentation.component';
-import { LoadingPresentationComponent } from '../../../components/common/presentation/loading-presentation.component';
-import { FeatureCollection, Position } from '../../../models/geojson.model';
+import { LoadingViewComponent } from '../../../../../components/ui/loading-view/loading-view.component';
+import { FeatureCollection, Position } from '../../../../../models/geojson.model';
+import { MapErrorViewComponent } from '../map-error-view/map-error-view.component';
 
 @Component({
-  selector: 'app-map-presentation',
+  selector: 'app-map-view',
   standalone: true,
-  imports: [LoadingPresentationComponent, ErrorPresentationComponent],
-  templateUrl: './map-presentation.component.html',
+  imports: [LoadingViewComponent, MapErrorViewComponent],
+  templateUrl: './map-view.component.html',
   styles: ``,
 })
-export class MapPresentationComponent implements AfterViewInit, OnDestroy {
+export class MapViewComponent implements AfterViewInit, OnDestroy {
   @ViewChild('mapCanvas') mapCanvasRef!: ElementRef<HTMLCanvasElement>;
 
   // 入力シグナル - 地図データを受け取る
