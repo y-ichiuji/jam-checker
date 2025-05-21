@@ -1,0 +1,16 @@
+<div class="relative w-full h-full min-h-[400px] bg-gray-100">
+  <!-- 読み込み中表示 -->
+  @if (loading()) {
+    <app-loading-presentation [message]="'地図データを読み込み中...'"></app-loading-presentation>
+  }
+
+  <!-- エラー表示 -->
+  @if (error()) {
+    <app-error-presentation
+      [message]="error() || '地図データの取得に失敗しました'"
+      (retry)="retryLoad.emit()"
+    ></app-error-presentation>
+  }
+
+  <canvas #mapCanvas class="w-full h-full"></canvas>
+</div>
