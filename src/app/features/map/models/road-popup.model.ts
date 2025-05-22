@@ -1,3 +1,5 @@
+import { TrafficLevel } from '../../../features/jam/models/traffic-level.model';
+
 /**
  * 道路クリック時の吹き出し情報を表すインターフェース
  */
@@ -13,5 +15,8 @@ export interface RoadPopup {
 
   /** 道路の特性情報（オプション） */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  properties?: Record<string, any>;
+  properties?: Record<string, any> | undefined;
+
+  /** 交通混雑レベル（オプション） */
+  trafficLevel?: TrafficLevel;
 }

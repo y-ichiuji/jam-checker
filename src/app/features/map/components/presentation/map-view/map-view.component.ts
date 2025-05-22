@@ -12,7 +12,7 @@ import { Subscription, fromEvent, merge } from 'rxjs';
 import { filter, map, switchMap, takeUntil, tap, throttleTime } from 'rxjs/operators';
 
 import { LoadingViewComponent } from '../../../../../components/ui/loading-view/loading-view.component';
-import { FeatureCollection, Position } from '../../../../../models/geojson.model';
+import { Feature, FeatureCollection, Position } from '../../../../../models/geojson.model';
 import {
   MapBounds,
   MapTransform,
@@ -22,6 +22,7 @@ import {
 } from '../../../models/map-transform.model';
 import { RoadPopup } from '../../../models/road-popup.model';
 import { MapErrorViewComponent } from '../map-error-view/map-error-view.component';
+import { getTrafficLevelLabel, setRoadStyleByTrafficLevel } from './road-style.helper';
 
 /**
  * MapView内で使用する定数
@@ -76,6 +77,9 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
 
   // 入力シグナル - 道路吹き出しデータを受け取る
   readonly roadPopup = input<RoadPopup | null>(null);
+
+  // 入力シグナル - 交通混雑情報を受け取る
+  readonly trafficData = input<Array<{ roadFeature: Feature; trafficLevel: number }>>();
 
   // 入力シグナル - 読み込み中状態
   readonly loading = input<boolean>(false);
@@ -135,6 +139,14 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     effect(() => {
       const roadData = this.roadData();
       if (roadData && this.context) {
+        this.drawMap();
+      }
+    });
+
+    // 交通データの変更を監視
+    effect(() => {
+      const trafficData = this.trafficData();
+      if (trafficData && this.context) {
         this.drawMap();
       }
     });
@@ -451,6 +463,20 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     const offsetX = transform.offsetX;
     const offsetY = transform.offsetY;
 
+    // 交通混雑データの取得
+    const trafficInfoList = this.trafficData();
+
+    // RoadFeature から ID へのマッピングを構築
+    const trafficMap = new Map<string, number>();
+    if (trafficInfoList) {
+      trafficInfoList.forEach(info => {
+        const id = info.roadFeature.properties?.['N12_005'] || info.roadFeature.id;
+        if (id) {
+          trafficMap.set(id.toString(), info.trafficLevel);
+        }
+      });
+    }
+
     // 各フィーチャーを描画
     roadData.features.forEach(feature => {
       if (!feature.geometry) return;
@@ -466,9 +492,20 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
           break;
       }
 
-      // 道路線のスタイル
-      ctx.strokeStyle = MAP_VIEW_CONSTANTS.LINE_STROKE_COLOR;
-      ctx.lineWidth = MAP_VIEW_CONSTANTS.LINE_WIDTH;
+      // 道路IDから交通混雑レベルを取得
+      const roadId = feature.properties?.['N12_005'] || feature.id;
+      if (roadId && trafficMap.has(roadId.toString())) {
+        // 交通混雑データに基づいて色と線幅を設定
+        const level = trafficMap.get(roadId.toString()) || 0;
+
+        // 交通混雑レベルに応じた色を設定（0-10のレベルに基づく）
+        setRoadStyleByTrafficLevel(ctx, level);
+      } else {
+        // デフォルトスタイル（交通データがない場合）
+        ctx.strokeStyle = MAP_VIEW_CONSTANTS.LINE_STROKE_COLOR;
+        ctx.lineWidth = MAP_VIEW_CONSTANTS.LINE_WIDTH;
+      }
+
       ctx.stroke();
     });
   }
@@ -654,7 +691,16 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
    * @param ctx キャンバスコンテキスト
    */
   private drawRoadPopup(popup: RoadPopup, ctx: CanvasRenderingContext2D): void {
-    const { x, y, roadName } = popup;
+    const { x, y, roadName, trafficLevel } = popup;
+
+    // 表示するテキストを準備（交通混雑情報がある場合は追加）
+    const lines: string[] = [roadName];
+
+    if (trafficLevel !== undefined) {
+      // ヘルパー関数を使用して交通レベルのラベルを取得
+      const label = getTrafficLevelLabel(trafficLevel);
+      lines.push(`交通状況: ${label}`);
+    }
 
     // 吹き出しの設定
     const padding = 10;
@@ -662,12 +708,12 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     const arrowHeight = 10;
     const arrowWidth = 15;
     const fontSize = 14;
+    const lineHeight = fontSize * 1.2; // 行間
     ctx.font = `${fontSize}px Arial, sans-serif`;
 
     // テキスト測定
-    const textMetrics = ctx.measureText(roadName);
-    const textWidth = textMetrics.width;
-    const textHeight = fontSize;
+    const textWidth = Math.max(...lines.map(line => ctx.measureText(line).width));
+    const textHeight = lineHeight * lines.length;
 
     // 吹き出しのサイズと位置計算
     const boxWidth = textWidth + padding * 2;
@@ -718,6 +764,38 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(roadName, x, boxY + boxHeight / 2);
+
+    // 複数行テキストの描画
+    lines.forEach((line, index) => {
+      const lineY = boxY + padding + index * lineHeight + fontSize / 2;
+
+      // 交通状況表示行の場合はカラーインジケーターを追加
+      if (index === 1 && trafficLevel !== undefined) {
+        const textWidth = ctx.measureText(line).width;
+        const statusStartX = x - textWidth / 2;
+
+        // 交通レベルの色を取得（setRoadStyleByTrafficLevel関数から色のマッピングを利用）
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        if (tempCtx) {
+          setRoadStyleByTrafficLevel(tempCtx, trafficLevel);
+          const levelColor = tempCtx.strokeStyle.toString();
+
+          // カラーマーカーを描画
+          const markerSize = 8;
+          const markerX = statusStartX - 5 - markerSize;
+          const markerY = lineY;
+          ctx.fillStyle = levelColor;
+          ctx.beginPath();
+          ctx.arc(markerX, markerY, markerSize / 2, 0, Math.PI * 2);
+          ctx.fill();
+
+          // テキスト色を元に戻す
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        }
+      }
+
+      ctx.fillText(line, x, lineY);
+    });
   }
 }

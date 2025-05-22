@@ -4,6 +4,7 @@
     [mapData]="mapData()"
     [roadData]="roadData()"
     [roadPopup]="roadPopup()"
+    [trafficData]="roadTrafficInfo()"
     [loading]="loading()"
     [error]="error()"
     [transform]="mapTransform()"
@@ -15,4 +16,9 @@
     (initialTransformChange)="handleInitialTransformChange($event)"
     (canvasInfoChange)="handleCanvasInfoChange($event)"
   ></app-map-view>
+
+  <!-- 交通コントロールパネル（時間選択と凡例） -->
+  <div class="absolute top-4 right-4 z-10">
+    <app-traffic-controls-container></app-traffic-controls-container>
+  </div>
 </div>

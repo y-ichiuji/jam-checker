@@ -1,6 +1,8 @@
-import { AfterViewInit, Component, OnInit, inject, signal } from '@angular/core';
+import { AfterViewInit, Component, OnInit, computed, inject, signal } from '@angular/core';
 
-import { FeatureCollection } from '../../../../../models/geojson.model';
+import { TrafficControlsContainerComponent } from '../../../../../features/jam/components/container/traffic-controls-container/traffic-controls-container.component';
+import { TrafficDataStore } from '../../../../../features/jam/stores/traffic-data.store';
+import { Feature, FeatureCollection } from '../../../../../models/geojson.model';
 import {
   MapBounds,
   MapTransform,
@@ -47,12 +49,13 @@ const MAP_CONTAINER_CONSTANTS = {
 @Component({
   selector: 'app-map-container',
   standalone: true,
-  imports: [MapViewComponent],
+  imports: [MapViewComponent, TrafficControlsContainerComponent],
   templateUrl: './map-container.component.html',
   styles: ``,
 })
 export class MapContainerComponent implements OnInit, AfterViewInit {
   private mapService = inject(MapService);
+  private trafficDataStore = inject(TrafficDataStore);
 
   // 状態管理のためのシグナル
   private readonly mapDataSignal = signal<FeatureCollection | null>(null);
@@ -79,6 +82,18 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
   protected readonly canvasInfo = this.canvasInfoSignal.asReadonly();
   protected readonly roadPopup = this.roadPopupSignal.asReadonly();
 
+  // 交通データ関連の計算されたシグナル
+  protected readonly roadTrafficInfo = computed(() => {
+    const roadData = this.roadDataSignal();
+    if (!roadData) return [];
+    return this.trafficDataStore.getRoadTrafficInfo(roadData);
+  });
+
+  // TrafficDataStore関連のシグナルの公開
+  protected readonly trafficDataLoading = this.trafficDataStore.loading;
+  protected readonly trafficDataError = this.trafficDataStore.error;
+  protected readonly selectedHour = this.trafficDataStore.selectedHour;
+
   /**
    * キャンバス情報変更イベントを処理する
    * MapViewComponentから受け取ったキャンバスサイズ情報を保存する
@@ -94,7 +109,10 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
     this.loadMapData();
 
     // 道路データを取得
-    this.loadRoadData();
+    this.loadRoadData().then(() => {
+      // 道路データの取得後、交通混雑データを取得
+      this.loadTrafficData();
+    });
 
     // 現在位置を取得する
     this.getCurrentLocation();
@@ -137,6 +155,20 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
   }
 
   /**
+   * 交通混雑データを読み込む
+   */
+  protected async loadTrafficData(): Promise<void> {
+    const roadData = this.roadDataSignal();
+    if (roadData) {
+      // TrafficDataStoreのloadTrafficDataメソッドを呼び出す
+      await this.trafficDataStore.loadTrafficData(roadData);
+    } else {
+      // 道路データが読み込まれるのを待ってから再試行
+      setTimeout(() => this.loadTrafficData(), MAP_CONTAINER_CONSTANTS.RETRY_DELAY_MS);
+    }
+  }
+
+  /**
    * マップクリックイベントのハンドラ
    * クリック位置で道路データが存在するか確認し、あれば吹き出しを表示
    */
@@ -147,12 +179,30 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
     if (clickedRoad) {
       // 道路が見つかった場合、吹き出しを表示
       const roadName = clickedRoad.properties?.['N12_004'] || '道路名不明';
-      this.roadPopupSignal.set({
+
+      // 道路の交通混雑レベルを取得
+      const roadId = clickedRoad.properties?.['N12_005'] || clickedRoad.id;
+
+      // 現在表示されている交通情報から該当する道路の交通レベルを検索
+      const popupData: RoadPopup = {
         x: event.x,
         y: event.y,
         roadName: roadName,
-        properties: clickedRoad.properties,
-      });
+        properties: clickedRoad.properties || undefined,
+      };
+
+      if (roadId) {
+        const trafficInfo = this.roadTrafficInfo().find(info => {
+          const infoId = info.roadFeature.properties?.['N12_005'] || info.roadFeature.id;
+          return infoId === roadId;
+        });
+
+        if (trafficInfo) {
+          popupData.trafficLevel = trafficInfo.trafficLevel;
+        }
+      }
+
+      this.roadPopupSignal.set(popupData);
     } else {
       // 道路が見つからない場合、吹き出しをクリア
       this.roadPopupSignal.set(null);
@@ -422,7 +472,7 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
    * @param position クリック位置（キャンバス座標）
    * @returns クリック位置にある道路のFeature、なければnull
    */
-  private findRoadAtPosition(position: { x: number; y: number }): any | null {
+  private findRoadAtPosition(position: { x: number; y: number }): Feature | null {
     const roadData = this.roadDataSignal();
     if (!roadData?.features?.length) {
       return null;
@@ -430,51 +480,119 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
 
     const transform = this.mapTransformSignal();
 
-    // クリック位置をマップ座標に変換（逆変換）
-    const mapX = (position.x - transform.offsetX) / transform.scale;
-    const mapY =
-      MAP_CONTAINER_CONSTANTS.LATITUDE_OFFSET - (position.y - transform.offsetY) / transform.scale;
+    // キャンバス座標をマップ座標に変換（逆変換）
+    const mapCoordinate = this.convertCanvasToMapCoordinate(position, transform);
 
     // クリック検出の許容距離を計算
-    // 固定ピクセルサイズ（画面上の感覚）を保つため、基本値は大きくし、最小値も設定する
-    const baseHitDistance = 5; // 基本値を5ピクセルに設定
+    const hitDistance = this.calculateHitDistance(transform.scale);
+
+    // 最も近い道路特徴を検索
+    return this.findClosestRoadFeature(roadData.features, mapCoordinate, hitDistance);
+  }
+
+  /**
+   * キャンバス座標をマップ座標に変換する
+   * @param canvasPosition キャンバス座標
+   * @param transform 現在のマップ変換情報
+   * @returns マップ座標
+   */
+  private convertCanvasToMapCoordinate(
+    canvasPosition: { x: number; y: number },
+    transform: MapTransform
+  ): { x: number; y: number } {
+    return {
+      x: (canvasPosition.x - transform.offsetX) / transform.scale,
+      y:
+        MAP_CONTAINER_CONSTANTS.LATITUDE_OFFSET -
+        (canvasPosition.y - transform.offsetY) / transform.scale,
+    };
+  }
+
+  /**
+   * スケールに基づいたヒット検出距離を計算する
+   * @param scale 現在のマップスケール
+   * @returns ヒット検出距離
+   */
+  private calculateHitDistance(scale: number): number {
+    const baseHitDistance = 5; // 基本値（ピクセル単位）
     const minHitDistance = 0.05; // 最小ヒット距離（地図座標系）
-    const hitDistance = Math.max(minHitDistance, baseHitDistance / transform.scale); // スケールに応じて調整し、最小値を確保
 
-    // 道路データからクリックされた道路を検索
-    for (const feature of roadData.features) {
+    // スケールに応じて調整し、最小値を確保
+    return Math.max(minHitDistance, baseHitDistance / scale);
+  }
+
+  /**
+   * 指定された座標に最も近い道路特徴を検索する
+   * @param features 検索対象の特徴リスト
+   * @param mapCoordinate マップ座標
+   * @param hitDistance 検出距離の閾値
+   * @returns 最も近い道路特徴、なければnull
+   */
+  private findClosestRoadFeature(
+    features: Feature[],
+    mapCoordinate: { x: number; y: number },
+    hitDistance: number
+  ): Feature | null {
+    for (const feature of features) {
+      // 現在はLineStringのみサポート
       if (feature.geometry?.type === 'LineString') {
-        const coordinates = feature.geometry.coordinates as number[][];
-
-        // LineStringの各セグメント（隣接する2点）について距離をチェック
-        for (let i = 0; i < coordinates.length - 1; i++) {
-          const p1 = coordinates[i];
-          const p2 = coordinates[i + 1];
-
-          if (
-            !p1 ||
-            !p1[0] ||
-            !p1[1] ||
-            !p2 ||
-            !p2[0] ||
-            !p2[1] ||
-            p1.length < 2 ||
-            p2.length < 2
-          ) {
-            continue;
-          }
-
-          // 点と線分の距離を計算
-          const distance = this.distanceToLineSegment(mapX, mapY, p1[0], p1[1], p2[0], p2[1]);
-
-          if (distance < hitDistance) {
-            return feature;
-          }
+        if (
+          this.isPointNearLineString(
+            mapCoordinate,
+            feature.geometry.coordinates as number[][],
+            hitDistance
+          )
+        ) {
+          return feature;
         }
       }
+      // 将来的な拡張ポイント: MultiLineStringなど他のジオメトリタイプのサポート
     }
-
     return null;
+  }
+
+  /**
+   * 点がLineStringに近いかどうかを判定する
+   * @param point マップ座標上の点
+   * @param coordinates LineStringの座標配列
+   * @param hitDistance ヒット検出距離
+   * @returns 近い場合はtrue
+   */
+  private isPointNearLineString(
+    point: { x: number; y: number },
+    coordinates: number[][],
+    hitDistance: number
+  ): boolean {
+    // 各線分をチェック
+    for (let i = 0; i < coordinates.length - 1; i++) {
+      const p1 = coordinates[i];
+      const p2 = coordinates[i + 1];
+
+      // 座標がnullまたはundefinedならスキップ
+      if (!p1 || !p2) {
+        continue;
+      }
+
+      // 座標の長さが不十分、または数値でないならスキップ
+      if (
+        p1.length < 2 ||
+        p2.length < 2 ||
+        typeof p1[0] !== 'number' ||
+        typeof p1[1] !== 'number' ||
+        typeof p2[0] !== 'number' ||
+        typeof p2[1] !== 'number'
+      ) {
+        continue;
+      }
+
+      // 点と線分の距離を計算
+      const distance = this.distanceToLineSegment(point.x, point.y, p1[0], p1[1], p2[0], p2[1]);
+
+      if (distance < hitDistance) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
