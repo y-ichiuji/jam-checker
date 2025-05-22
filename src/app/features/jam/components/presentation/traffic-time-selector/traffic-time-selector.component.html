@@ -1,0 +1,59 @@
+<div class="traffic-time-selector">
+  <div class="flex flex-col gap-3">
+    <div class="flex justify-between items-center">
+      <label for="hour-slider" class="text-sm font-medium">
+        時間選択:
+        <span class="font-bold ml-1">{{ formatHour(selectedHour()) }}</span>
+        <span
+          class="text-xs ml-1 px-2 py-0.5 rounded-full"
+          [ngClass]="{
+            'bg-indigo-100 text-indigo-800': selectedHour() >= 0 && selectedHour() < 6,
+            'bg-blue-100 text-blue-800': selectedHour() >= 6 && selectedHour() < 12,
+            'bg-orange-100 text-orange-800': selectedHour() >= 12 && selectedHour() < 18,
+            'bg-purple-100 text-purple-800': selectedHour() >= 18 && selectedHour() <= 23,
+          }"
+        >
+          {{ getPeriodLabel(selectedHour()) }}
+        </span>
+      </label>
+    </div>
+
+    <input
+      type="range"
+      id="hour-slider"
+      class="w-full accent-blue-600"
+      [value]="selectedHour()"
+      min="0"
+      max="23"
+      step="1"
+      (input)="onHourChange($event)"
+      aria-label="時間選択スライダー"
+      aria-valuemin="0"
+      aria-valuemax="23"
+      [attr.aria-valuenow]="selectedHour()"
+      [attr.aria-valuetext]="formatHour(selectedHour())"
+    />
+
+    <div class="flex justify-between text-xs text-gray-500">
+      <span>0:00</span>
+      <span>6:00</span>
+      <span>12:00</span>
+      <span>18:00</span>
+      <span>23:00</span>
+    </div>
+
+    <!-- 時間帯インジケーター -->
+    <div class="grid grid-cols-4 gap-0.5 mt-1 h-1">
+      <div class="bg-indigo-300 rounded-l"></div>
+      <div class="bg-blue-300"></div>
+      <div class="bg-orange-300"></div>
+      <div class="bg-purple-300 rounded-r"></div>
+    </div>
+    <div class="flex justify-between text-xs text-gray-500 -mt-1">
+      <span>深夜</span>
+      <span>午前</span>
+      <span>午後</span>
+      <span>夜間</span>
+    </div>
+  </div>
+</div>

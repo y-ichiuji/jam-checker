@@ -71,6 +71,6 @@
       "file": ".github/.copilot-testGeneration-instructions.md"
     }
   ],
-  "cSpell.words": ["esbenp", "fuga", "ghpages", "hoge", "piyo", "WCAG"],
+  "cSpell.words": ["esbenp", "fuga", "Geolocation", "ghpages", "hoge", "piyo", "WCAG"],
   "cSpell.ignorePaths": ["**/public/geojson/**"]
 }

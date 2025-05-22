@@ -1,0 +1,15 @@
+<div
+  class="traffic-legend p-2 bg-white bg-opacity-80 rounded shadow"
+  role="group"
+  aria-label="交通状況凡例"
+>
+  <h3 class="text-sm font-medium mb-2">交通状況</h3>
+  <div class="grid gap-1">
+    @for (level of legendLevels; track level) {
+      <div class="flex items-center gap-2">
+        <div class="w-5 h-2 rounded" [style.background-color]="getColorForLevel(level)"></div>
+        <span class="text-xs">{{ getLabelForLevel(level) }}</span>
+      </div>
+    }
+  </div>
+</div>
