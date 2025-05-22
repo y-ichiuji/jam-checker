@@ -12,6 +12,7 @@ import { Subscription, fromEvent, merge } from 'rxjs';
 import { filter, map, switchMap, takeUntil, tap, throttleTime } from 'rxjs/operators';
 
 import { LoadingViewComponent } from '../../../../../components/ui/loading-view/loading-view.component';
+import { getTrafficLevelColor } from '../../../../../features/jam/models/traffic-level.model';
 import { Feature, FeatureCollection, Position } from '../../../../../models/geojson.model';
 import {
   MapBounds,
@@ -716,7 +717,7 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     const textHeight = lineHeight * lines.length;
 
     // 吹き出しのサイズと位置計算
-    const boxWidth = textWidth + padding * 2;
+    const boxWidth = textWidth + padding * 5;
     const boxHeight = textHeight + padding * 2;
     const boxX = x - boxWidth / 2;
     const boxY = y - boxHeight - arrowHeight - 5; // 少し上に表示
@@ -774,25 +775,20 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
         const textWidth = ctx.measureText(line).width;
         const statusStartX = x - textWidth / 2;
 
-        // 交通レベルの色を取得（setRoadStyleByTrafficLevel関数から色のマッピングを利用）
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
-        if (tempCtx) {
-          setRoadStyleByTrafficLevel(tempCtx, trafficLevel);
-          const levelColor = tempCtx.strokeStyle.toString();
+        // 交通レベルの色を直接取得（パフォーマンス最適化）
+        const levelColor = getTrafficLevelColor(trafficLevel);
 
-          // カラーマーカーを描画
-          const markerSize = 8;
-          const markerX = statusStartX - 5 - markerSize;
-          const markerY = lineY;
-          ctx.fillStyle = levelColor;
-          ctx.beginPath();
-          ctx.arc(markerX, markerY, markerSize / 2, 0, Math.PI * 2);
-          ctx.fill();
+        // カラーマーカーを描画
+        const markerSize = 8;
+        const markerX = statusStartX - 5 - markerSize;
+        const markerY = lineY;
+        ctx.fillStyle = levelColor;
+        ctx.beginPath();
+        ctx.arc(markerX, markerY, markerSize / 2, 0, Math.PI * 2);
+        ctx.fill();
 
-          // テキスト色を元に戻す
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        }
+        // テキスト色を元に戻す
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       }
 
       ctx.fillText(line, x, lineY);

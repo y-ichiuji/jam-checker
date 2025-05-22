@@ -188,7 +188,7 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
         x: event.x,
         y: event.y,
         roadName: roadName,
-        properties: clickedRoad.properties || undefined,
+        properties: clickedRoad.properties || {},
       };
 
       if (roadId) {

@@ -15,7 +15,7 @@ export interface RoadPopup {
 
   /** 道路の特性情報（オプション） */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  properties?: Record<string, any> | undefined;
+  properties?: Record<string, any>;
 
   /** 交通混雑レベル（オプション） */
   trafficLevel?: TrafficLevel;

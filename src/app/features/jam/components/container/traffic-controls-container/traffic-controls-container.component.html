@@ -16,7 +16,7 @@
 
     <!-- ローディング表示 -->
     @if (loading()) {
-      <div class="text-center text-sm text-blue-600">
+      <div class="text-center text-sm text-blue-600" role="status" aria-live="polite">
         <span class="inline-block animate-spin mr-2">⟳</span>交通データ読込中...
       </div>
     }
