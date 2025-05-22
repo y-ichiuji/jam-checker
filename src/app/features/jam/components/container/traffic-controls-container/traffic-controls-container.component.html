@@ -1,12 +1,7 @@
-<div class="traffic-controls p-4 bg-white bg-opacity-90 rounded-lg shadow-lg">
-  <div class="flex flex-col gap-4">
-    <!-- レジェンド表示 -->
-    <div>
-      <app-traffic-legend></app-traffic-legend>
-    </div>
-
+<div class="traffic-controls p-4 bg-white bg-opacity-90 rounded-lg shadow-lg w-full">
+  <div class="flex flex-col sm:flex-row gap-6 items-start justify-between">
     <!-- 時間選択コンポーネント -->
-    <div>
+    <div class="order-2 sm:order-1 w-full sm:flex-1 sm:max-w-[70%]">
       <app-traffic-time-selector
         [selectedHour]="selectedHour()"
         (hourChange)="handleHourChange($event)"
@@ -14,9 +9,14 @@
       </app-traffic-time-selector>
     </div>
 
+    <!-- レジェンド表示 -->
+    <div class="order-1 sm:order-2 flex-shrink-0 self-center">
+      <app-traffic-legend></app-traffic-legend>
+    </div>
+
     <!-- ローディング表示 -->
     @if (loading()) {
-      <div class="text-center text-sm text-blue-600" role="status" aria-live="polite">
+      <div class="order-3 text-center text-sm text-blue-600" role="status" aria-live="polite">
         <span class="inline-block animate-spin mr-2">⟳</span>交通データ読込中...
       </div>
     }
