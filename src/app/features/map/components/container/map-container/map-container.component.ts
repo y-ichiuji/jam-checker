@@ -200,12 +200,16 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
         if (trafficInfo) {
           popupData.trafficLevel = trafficInfo.trafficLevel;
         }
+
+        // 選択された道路IDをTrafficDataStoreに通知
+        this.trafficDataStore.selectRoad(roadId);
       }
 
       this.roadPopupSignal.set(popupData);
     } else {
-      // 道路が見つからない場合、吹き出しをクリア
+      // 道路が見つからない場合、吹き出しをクリアし、選択をリセット
       this.roadPopupSignal.set(null);
+      this.trafficDataStore.selectRoad(null);
     }
   }
 

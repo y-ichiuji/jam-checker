@@ -1,7 +1,12 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { FeatureCollection } from '../../../models/geojson.model';
-import { DailyTrafficData, HourOfDay, RoadTrafficInfo } from '../models/traffic-data.model';
+import {
+  DailyTrafficData,
+  HourOfDay,
+  RoadTrafficInfo,
+  TrafficLevelMap,
+} from '../models/traffic-data.model';
 import { TrafficDataService } from '../services/traffic-data.service';
 
 /**
@@ -19,15 +24,40 @@ export class TrafficDataStore {
   private readonly selectedHourSignal = signal<HourOfDay>(new Date().getHours() as HourOfDay);
   private readonly loadingSignal = signal<boolean>(false);
   private readonly errorSignal = signal<string | null>(null);
+  private readonly selectedRoadIdSignal = signal<string | null>(null);
 
   // 読み取り専用の公開シグナル
   public readonly trafficData = this.trafficDataSignal.asReadonly();
   public readonly selectedHour = this.selectedHourSignal.asReadonly();
   public readonly loading = this.loadingSignal.asReadonly();
   public readonly error = this.errorSignal.asReadonly();
+  public readonly selectedRoadId = this.selectedRoadIdSignal.asReadonly();
 
   // 計算されたシグナル
   public readonly hasTrafficData = computed(() => !!this.trafficDataSignal());
+  public readonly selectedRoadTrafficData = computed(() => {
+    const roadId = this.selectedRoadIdSignal();
+    const trafficData = this.trafficDataSignal();
+
+    if (!roadId || !trafficData || !trafficData.hourlyData?.length) {
+      return null;
+    }
+
+    // 選択された道路の全時間帯のトラフィックレベルを収集
+    const roadTrafficData: TrafficLevelMap = {};
+
+    trafficData.hourlyData.forEach(hourData => {
+      const hour = hourData.hour.toString();
+      if (hourData.trafficLevels && roadId in hourData.trafficLevels) {
+        const level = hourData.trafficLevels[roadId];
+        if (level !== undefined) {
+          roadTrafficData[hour] = level;
+        }
+      }
+    });
+
+    return Object.keys(roadTrafficData).length > 0 ? roadTrafficData : null;
+  });
 
   /**
    * 現在選択されている時間の交通混雑情報を取得します
@@ -73,6 +103,22 @@ export class TrafficDataStore {
     if (hour >= 0 && hour <= 23) {
       this.selectedHourSignal.set(hour);
     }
+  }
+
+  /**
+   * 選択された道路IDを変更します
+   * @param roadId 道路ID
+   */
+  public selectRoadId(roadId: string | null): void {
+    this.selectedRoadIdSignal.set(roadId);
+  }
+
+  /**
+   * 選択された道路IDを設定します
+   * @param roadId 道路ID
+   */
+  public selectRoad(roadId: string | null): void {
+    this.selectedRoadIdSignal.set(roadId);
   }
 
   /**

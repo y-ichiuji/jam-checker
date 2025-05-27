@@ -1,9 +1,10 @@
 <div class="traffic-controls p-4 bg-white bg-opacity-90 rounded-lg shadow-lg w-full">
-  <div class="flex flex-col sm:flex-row gap-6 items-start justify-between">
+  <div class="flex flex-col sm:flex-row gap-6 items-center justify-between">
     <!-- 時間選択コンポーネント -->
     <div class="order-2 sm:order-1 w-full sm:flex-1 sm:max-w-[70%]">
       <app-traffic-time-selector
         [selectedHour]="selectedHour()"
+        [selectedRoadTrafficData]="selectedRoadTrafficData()"
         (hourChange)="handleHourChange($event)"
       >
       </app-traffic-time-selector>

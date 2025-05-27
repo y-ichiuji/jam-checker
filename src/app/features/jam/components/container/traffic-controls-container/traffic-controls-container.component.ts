@@ -21,6 +21,9 @@ export class TrafficControlsContainerComponent {
   // TrafficDataStoreからのローディング状態を公開
   protected readonly loading = this.trafficDataStore.loading;
 
+  // TrafficDataStoreからの選択された道路の交通データを公開
+  protected readonly selectedRoadTrafficData = this.trafficDataStore.selectedRoadTrafficData;
+
   /**
    * 時間変更イベントのハンドラー
    * @param hour 選択された時間（0-23）

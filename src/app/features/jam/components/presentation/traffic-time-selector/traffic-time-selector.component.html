@@ -1,20 +1,9 @@
-<div class="traffic-time-selector w-full">
-  <div class="flex flex-col gap-3 w-full">
+<div class="traffic-time-selector w-full mb-1">
+  <div class="flex flex-col gap-4 w-full">
     <div class="flex justify-between items-center">
       <div class="text-sm font-medium">
         時間選択:
         <span class="font-bold ml-1">{{ formatHour(selectedHour()) }}</span>
-        <span
-          class="text-xs ml-1 px-2 py-0.5 rounded-full"
-          [ngClass]="{
-            'bg-indigo-100 text-indigo-800': selectedHour() >= 0 && selectedHour() < 6,
-            'bg-blue-100 text-blue-800': selectedHour() >= 6 && selectedHour() < 12,
-            'bg-orange-100 text-orange-800': selectedHour() >= 12 && selectedHour() < 18,
-            'bg-purple-100 text-purple-800': selectedHour() >= 18 && selectedHour() <= 23,
-          }"
-        >
-          {{ getPeriodLabel(selectedHour()) }}
-        </span>
       </div>
 
       <!-- アクセシビリティのための隠しコントロール -->
@@ -64,14 +53,6 @@
       (keydown)="handleKeyDown($event)"
     >
       <canvas #timeCanvas class="w-full h-full cursor-pointer"></canvas>
-    </div>
-
-    <!-- 時間帯ラベル -->
-    <div class="flex justify-between text-xs text-gray-500">
-      <span>深夜</span>
-      <span>午前</span>
-      <span>午後</span>
-      <span>夜間</span>
     </div>
   </div>
 </div>
