@@ -106,14 +106,6 @@ export class TrafficDataStore {
   }
 
   /**
-   * 選択された道路IDを変更します
-   * @param roadId 道路ID
-   */
-  public selectRoadId(roadId: string | null): void {
-    this.selectedRoadIdSignal.set(roadId);
-  }
-
-  /**
    * 選択された道路IDを設定します
    * @param roadId 道路ID
    */
