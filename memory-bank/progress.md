@@ -77,6 +77,8 @@
 - TrafficTimeSelectorComponentの機能強化（時間帯ラベルと動的スタイリング）
 - MapContainerComponentのリファクタリング（findRoadAtPosition関数を小さな専用メソッドに分割）
 - road-style.helper.tsとtraffic-level.model.tsのコード重複の解消
+- TrafficTimeSelectorComponentのUIの簡素化（2025年5月28日）
+- TrafficTimeSelectorComponentの表示領域の最適化（スクロール可能な部分を縦に拡大）
 
 ### 進行中のタスク
 
