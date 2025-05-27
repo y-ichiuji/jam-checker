@@ -21,19 +21,19 @@ flowchart TD
 
 ### コアファイル（必須）
 
-1. `project-brief.md`
+1. [project-brief.instructions.md](./project-brief.instructions.md)
    - 他のすべてのファイルを形作る基礎文書
    - 存在しない場合はプロジェクト開始時に作成
    - コア要件と目標を定義
    - プロジェクト範囲の真実の源
 
-2. `product-context.md`
+2. [product-context.instructions.md](./product-context.instructions.md)
    - このプロジェクトが存在する理由
    - 解決する問題
    - どのように機能すべきか
    - ユーザー体験の目標
 
-3. `active-context.md`
+3. [active-context.instructions.md](./active-context.instructions.md)
    - 現在の作業の焦点
    - 最近の変更
    - 次のステップ
@@ -41,21 +41,21 @@ flowchart TD
    - 重要なパターンと優先事項
    - 学びとプロジェクトの洞察
 
-4. `system-patterns.md`
+4. [system-patterns.instructions.md](./system-patterns.instructions.md)
    - システムアーキテクチャ
    - 主要な技術的決定
    - 使用中の設計パターン
    - コンポーネントの関係
    - 重要な実装パス
 
-5. `tech-context.md`
+5. [tech-context.instructions.md](./tech-context.instructions.md)
    - 使用している技術
    - 開発環境
    - 技術的制約
    - 依存関係
    - ツールの使用パターン
 
-6. `progress.md`
+6. [progress.instructions.md](./progress.instructions.md)
    - 機能している部分
    - 構築すべき残りの部分
    - 現在の状態
