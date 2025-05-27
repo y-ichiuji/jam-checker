@@ -7,7 +7,7 @@ import { MapTile, MapTileConfig, TileBounds } from '../models/map-tile.model';
  */
 const TILE_MANAGER_CONSTANTS = {
   /** タイルグリッドの分割数（縦横それぞれ4分割） */
-  GRID_SIZE: 8,
+  GRID_SIZE: 4,
   /** 日本の緯度範囲（北端：北海道） */
   JAPAN_MAX_LATITUDE: 45.5,
   /** 日本の緯度範囲（南端：沖縄） */
