@@ -6,7 +6,7 @@
 
 各タスクを開始する際は、必ず以下の手順に従ってください：
 
-1. **メモリーバンクの読み込み**: `/memory-bank/memory-bank.md`およびその関連ファイルを読み込み、プロジェクトの現状と進捗を理解する
+1. **メモリーバンクの読み込み**: `./instructions/memory-bank/memory-bank.instructions.md`およびその関連ファイルを読み込み、プロジェクトの現状と進捗を理解する
 2. **要件の確認**: このドキュメントと最新のプロジェクト要件を確認する
 3. **タスクの実行**: メモリーバンクの情報に基づいて、適切な実装を行う
 4. **ドキュメントの更新**: 必要に応じてメモリーバンクの情報を更新する
@@ -21,12 +21,12 @@
 - **プロジェクト管理**: GitHub
 
 詳細な情報は以下のファイルを参照してください：
-- プロジェクトの詳細要件：`/memory-bank/project-brief.md`
-- 製品コンテキスト：`/memory-bank/product-context.md`
-- システムパターン：`/memory-bank/system-patterns.md`
-- 技術コンテキスト：`/memory-bank/tech-context.md`
-- 現在の状況：`/memory-bank/active-context.md`
-- 進捗状況：`/memory-bank/progress.md`
+- プロジェクトの詳細要件：`./instructions/memory-bank/project-brief.instructions.md`
+- 製品コンテキスト：`./instructions/memory-bank/product-context.instructions.md`
+- システムパターン：`./instructions/memory-bank/system-patterns.instructions.md`
+- 技術コンテキスト：`./instructions/memory-bank/tech-context.instructions.md`
+- 現在の状況：`./instructions/memory-bank/active-context.instructions.md`
+- 進捗状況：`./instructions/memory-bank/progress.instructions.md`
 
 ## コーディング規約
 

@@ -5,6 +5,7 @@ import {
   OnDestroy,
   ViewChild,
   effect,
+  inject,
   input,
   output,
 } from '@angular/core';
@@ -14,6 +15,7 @@ import { filter, map, switchMap, takeUntil, tap, throttleTime } from 'rxjs/opera
 import { LoadingViewComponent } from '../../../../../components/ui/loading-view/loading-view.component';
 import { getTrafficLevelColor } from '../../../../../features/jam/models/traffic-level.model';
 import { Feature, FeatureCollection, Position } from '../../../../../models/geojson.model';
+import { TileBounds } from '../../../models/map-tile.model';
 import {
   MapBounds,
   MapTransform,
@@ -22,6 +24,8 @@ import {
   createInitialTransform,
 } from '../../../models/map-transform.model';
 import { RoadPopup } from '../../../models/road-popup.model';
+import { TileManagerService } from '../../../services/tile-manager.service';
+import { TileRendererService } from '../../../services/tile-renderer.service';
 import { MapErrorViewComponent } from '../map-error-view/map-error-view.component';
 import { getTrafficLevelLabel, setRoadStyleByTrafficLevel } from './road-style.helper';
 
@@ -121,11 +125,15 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
   // RxJSのサブスクリプション管理
   private subscriptions = new Subscription();
 
+  private tileManagerService = inject(TileManagerService);
+  private tileRendererService = inject(TileRendererService);
+
   constructor() {
     // 地図データの変更を監視
     effect(() => {
       const data = this.mapData();
       if (data && this.context) {
+        this.tileManagerService.resetTiles();
         this.drawMap();
 
         // 地図の境界計算
@@ -140,6 +148,7 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     effect(() => {
       const roadData = this.roadData();
       if (roadData && this.context) {
+        this.tileManagerService.resetTiles();
         this.drawMap();
       }
     });
@@ -331,12 +340,36 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
+   * 現在のビューポートの境界を計算
+   */
+  private calculateViewportBounds(transform: MapTransform, canvas: HTMLCanvasElement): TileBounds {
+    // キャンバス座標から地理座標への変換
+    const canvasToGeo = (x: number, y: number): { longitude: number; latitude: number } => {
+      const longitude = (x - transform.offsetX) / transform.scale;
+      const latitude = 90 - (y - transform.offsetY) / transform.scale;
+      return { longitude, latitude };
+    };
+
+    // ビューポートの四隅の座標を計算
+    const topLeft = canvasToGeo(0, 0);
+    const bottomRight = canvasToGeo(canvas.width, canvas.height);
+
+    return {
+      minLon: Math.min(topLeft.longitude, bottomRight.longitude),
+      maxLon: Math.max(topLeft.longitude, bottomRight.longitude),
+      minLat: Math.min(topLeft.latitude, bottomRight.latitude),
+      maxLat: Math.max(topLeft.latitude, bottomRight.latitude),
+    };
+  }
+
+  /**
    * 地図データをキャンバスに描画する
    */
   private drawMap(): void {
     const mapData = this.mapData();
     const roadData = this.roadData();
     const roadPopup = this.roadPopup();
+    const trafficInfoList = this.trafficData();
     if (!this.context || (!mapData && !roadData)) return;
 
     const canvas = this.mapCanvasRef.nativeElement;
@@ -348,15 +381,46 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
     // 現在の変換情報を取得
     const currentTransform = this.transform();
 
-    // 世界地図の描画（あれば）
-    if (mapData) {
-      this.drawGeoJSONWithTransform(mapData, ctx, canvas, currentTransform);
+    // タイルの初期化（必要な場合）
+    if (mapData && !this.tileManagerService.hasTiles()) {
+      this.tileManagerService.initializeTiles(mapData);
+    }
+    if (roadData && !this.tileManagerService.hasRoadTiles()) {
+      this.tileManagerService.initializeRoadTiles(roadData);
     }
 
-    // 道路データの描画（あれば）
-    if (roadData) {
-      this.drawRoadGeoJSON(roadData, ctx, currentTransform);
+    // 現在のビューポートを計算
+    const viewport = this.calculateViewportBounds(currentTransform, canvas);
+
+    // 交通混雑情報のマップを作成
+    const trafficMap = new Map<string, number>();
+    if (trafficInfoList) {
+      trafficInfoList.forEach(info => {
+        const id = info.roadFeature.properties?.['N12_005'] || info.roadFeature.id;
+        if (id) {
+          trafficMap.set(id.toString(), info.trafficLevel);
+        }
+      });
     }
+
+    // タイルをリセット
+    this.tileManagerService.resetTiles();
+
+    // ビューポート内のタイルを描画
+    const visibleTiles = this.tileManagerService.getTilesInViewport(viewport);
+    visibleTiles.forEach(tile => {
+      if (!tile.isRendered()) {
+        this.tileRendererService.renderTile(ctx, tile, currentTransform, trafficMap);
+      }
+    });
+
+    // 道路タイルを描画
+    const visibleRoadTiles = this.tileManagerService.getRoadTilesInViewport(viewport);
+    visibleRoadTiles.forEach(tile => {
+      if (!tile.isRendered()) {
+        this.tileRendererService.renderTile(ctx, tile, currentTransform, trafficMap);
+      }
+    });
 
     // 吹き出しの描画（あれば）
     if (roadPopup) {
