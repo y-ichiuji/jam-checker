@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { AfterViewInit, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 
 import { TrafficControlsContainerComponent } from '../../../../../features/jam/components/container/traffic-controls-container/traffic-controls-container.component';
 import { TrafficDataStore } from '../../../../../features/jam/stores/traffic-data.store';
@@ -93,6 +93,34 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
   protected readonly trafficDataLoading = this.trafficDataStore.loading;
   protected readonly trafficDataError = this.trafficDataStore.error;
   protected readonly selectedHour = this.trafficDataStore.selectedHour;
+
+  constructor() {
+    // 選択時刻が変化したら吹き出しの交通レベルも更新
+    effect(() => {
+      // 現在のポップアップ情報と選択された時間を取得
+      const popup = this.roadPopupSignal();
+      this.selectedHour(); // 明示的に selectedHour の変更を監視
+
+      // ポップアップが表示されていない場合は何もしない
+      if (!popup || !popup.properties) return;
+
+      // 道路IDを取得
+      const roadId = popup.properties['N12_005'] || popup.properties['id'];
+      if (!roadId) return;
+
+      // 現在の時間帯における道路の交通情報を取得
+      const roadTrafficInfo = this.roadTrafficInfo();
+      const info = roadTrafficInfo.find(info => {
+        const infoId = info.roadFeature.properties?.['N12_005'] || info.roadFeature.id;
+        return infoId === roadId;
+      });
+
+      // 交通情報が見つかり、かつ現在のポップアップの交通レベルと異なる場合のみ更新
+      if (info && popup.trafficLevel !== info.trafficLevel) {
+        this.roadPopupSignal.set({ ...popup, trafficLevel: info.trafficLevel });
+      }
+    });
+  }
 
   /**
    * キャンバス情報変更イベントを処理する
