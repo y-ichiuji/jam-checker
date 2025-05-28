@@ -83,19 +83,19 @@ export interface Point {
  */
 export const MAP_TRANSFORM_CONSTANTS = {
   /** 初期スケール値 */
-  INITIAL_SCALE: 1,
+  INITIAL_SCALE: 20,
   /** 初期X軸オフセット */
-  INITIAL_OFFSET_X: 0,
+  INITIAL_OFFSET_X: 500,
   /** 初期Y軸オフセット */
-  INITIAL_OFFSET_Y: 0,
+  INITIAL_OFFSET_Y: 30,
   /** 最小拡大率 */
   MIN_SCALE: 1.0,
   /** 最大拡大率 */
-  MAX_SCALE: 5000,
+  MAX_SCALE: 20000,
   /** X軸方向の最大オフセット初期値 */
-  INITIAL_MAX_OFFSET_X: 2000,
+  INITIAL_MAX_OFFSET_X: 10000,
   /** Y軸方向の最大オフセット初期値 */
-  INITIAL_MAX_OFFSET_Y: 1500,
+  INITIAL_MAX_OFFSET_Y: 10000,
 };
 
 /**
