@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { AfterViewInit, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 
 import { TrafficControlsContainerComponent } from '../../../../../features/jam/components/container/traffic-controls-container/traffic-controls-container.component';
 import { TrafficDataStore } from '../../../../../features/jam/stores/traffic-data.store';
@@ -27,13 +27,15 @@ const MAP_CONTAINER_CONSTANTS = {
   /** 最小スケール */
   MIN_SCALE: 1.0,
   /** マックス移動制限の基本値 */
-  BASE_OFFSET_LIMIT: 500,
+  BASE_OFFSET_LIMIT: 1000,
   /** キャンバス幅に対するオフセット制限の比率 */
-  CANVAS_WIDTH_OFFSET_RATIO: 0.6,
+  CANVAS_WIDTH_OFFSET_RATIO: 1.2,
   /** キャンバス高さに対するオフセット制限の比率 */
-  CANVAS_HEIGHT_OFFSET_RATIO: 0.6,
+  CANVAS_HEIGHT_OFFSET_RATIO: 1.2,
   /** 現在地表示時のスケール */
-  CURRENT_LOCATION_SCALE: 100,
+  CURRENT_LOCATION_SCALE: 1000,
+  /** 日本表示時のスケール（現在地取得できない場合） */
+  JAPAN_LOCATION_SCALE: 50,
   /** 再試行の待機時間（ミリ秒） */
   RETRY_DELAY_MS: 100,
   /** 位置情報取得の高精度モード */
@@ -93,6 +95,34 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
   protected readonly trafficDataLoading = this.trafficDataStore.loading;
   protected readonly trafficDataError = this.trafficDataStore.error;
   protected readonly selectedHour = this.trafficDataStore.selectedHour;
+
+  constructor() {
+    // 選択時刻が変化したら吹き出しの交通レベルも更新
+    effect(() => {
+      // 現在のポップアップ情報と選択された時間を取得
+      const popup = this.roadPopupSignal();
+      this.selectedHour(); // 明示的に selectedHour の変更を監視
+
+      // ポップアップが表示されていない場合は何もしない
+      if (!popup || !popup.properties) return;
+
+      // 道路IDを取得
+      const roadId = popup.properties['N12_005'] || popup.properties['id'];
+      if (!roadId) return;
+
+      // 現在の時間帯における道路の交通情報を取得
+      const roadTrafficInfo = this.roadTrafficInfo();
+      const info = roadTrafficInfo.find(info => {
+        const infoId = info.roadFeature.properties?.['N12_005'] || info.roadFeature.id;
+        return infoId === roadId;
+      });
+
+      // 交通情報が見つかり、かつ現在のポップアップの交通レベルと異なる場合のみ更新
+      if (info && popup.trafficLevel !== info.trafficLevel) {
+        this.roadPopupSignal.set({ ...popup, trafficLevel: info.trafficLevel });
+      }
+    });
+  }
 
   /**
    * キャンバス情報変更イベントを処理する
@@ -316,13 +346,14 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
 
     const currentScale = this.mapTransformSignal().scale;
     // スケールに応じて制限を調整（より大きいスケールではより大きい移動を許可）
+    // より広範囲な移動を可能にするために制限値を増加
     const maxOffsetX = Math.max(
       MAP_CONTAINER_CONSTANTS.BASE_OFFSET_LIMIT,
-      canvasWidth * MAP_CONTAINER_CONSTANTS.CANVAS_WIDTH_OFFSET_RATIO * currentScale
+      canvasWidth * MAP_CONTAINER_CONSTANTS.CANVAS_WIDTH_OFFSET_RATIO * currentScale * 2
     );
     const maxOffsetY = Math.max(
       MAP_CONTAINER_CONSTANTS.BASE_OFFSET_LIMIT,
-      canvasHeight * MAP_CONTAINER_CONSTANTS.CANVAS_HEIGHT_OFFSET_RATIO * currentScale
+      canvasHeight * MAP_CONTAINER_CONSTANTS.CANVAS_HEIGHT_OFFSET_RATIO * currentScale * 2
     );
 
     this.mapTransformSignal.update(transform => ({
@@ -331,10 +362,7 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
       maxOffsetY,
     }));
 
-    // キャンバス情報を更新
-    this.canvasInfoSignal.set({ width: canvasWidth, height: canvasHeight });
-
-    // キャンバス情報を更新
+    // キャンバス情報を更新（重複呼び出しを削除）
     this.canvasInfoSignal.set({ width: canvasWidth, height: canvasHeight });
   }
 
@@ -369,6 +397,58 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
   }
 
   /**
+   * 日本の中心位置を中心としたマップ表示を設定する
+   */
+  private setDefaultJapanPosition(): void {
+    // 日本のおおよその中心位置（本州中央部）
+    const japanLatitude = 36.2048;
+    const japanLongitude = 138.2529;
+
+    // マップデータが読み込まれるのを待つ
+    const waitForMapData = (): void => {
+      if (this.mapDataSignal()) {
+        // 保存されたキャンバス情報を使用
+        const canvasInfo = this.canvasInfoSignal();
+        if (canvasInfo.width <= 0 || canvasInfo.height <= 0) {
+          // キャンバス情報がまだ有効でない場合は少し待ってから再試行
+          setTimeout(waitForMapData, MAP_CONTAINER_CONSTANTS.RETRY_DELAY_MS);
+          return;
+        }
+
+        const canvasWidth = canvasInfo.width;
+        const canvasHeight = canvasInfo.height;
+
+        // 日本全体が見えるようにスケールを設定
+        const scale = MAP_CONTAINER_CONSTANTS.JAPAN_LOCATION_SCALE;
+
+        // 緯度経度を画面座標に変換
+        const pointX = japanLongitude * scale;
+        const pointY = (MAP_CONTAINER_CONSTANTS.LATITUDE_OFFSET - japanLatitude) * scale;
+
+        // 日本が画面中央に来るようオフセットを計算
+        const offsetX = canvasWidth / 2 - pointX;
+        const offsetY = canvasHeight / 2 - pointY;
+
+        this.mapTransformSignal.update(transform => ({
+          ...transform,
+          scale: scale,
+          offsetX: offsetX,
+          offsetY: offsetY,
+          minScale: MAP_CONTAINER_CONSTANTS.MIN_SCALE,
+        }));
+
+        // マップの再描画をトリガー
+        this.forceMapRedraw();
+      } else {
+        // マップデータがまだ読み込まれていない場合は少し待ってから再試行
+        setTimeout(waitForMapData, MAP_CONTAINER_CONSTANTS.RETRY_DELAY_MS);
+      }
+    };
+
+    waitForMapData();
+  }
+
+  /**
    * 現在の地理位置情報を取得する
    */
   private getCurrentLocation(): void {
@@ -398,7 +478,8 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
             default:
               console.warn('位置情報の取得中に未知のエラーが発生しました');
           }
-          // 位置情報が取得できない場合はデフォルト表示のままとする
+          // 位置情報が取得できない場合は日本の中心を表示
+          this.setDefaultJapanPosition();
         },
         // オプション：タイムアウトを10秒に設定、高精度モードを有効
         {
@@ -409,7 +490,8 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
       );
     } else {
       console.error('このブラウザでは位置情報がサポートされていません');
-      // Geolocationがサポートされていない場合はデフォルト表示
+      // Geolocationがサポートされていない場合は日本の中心を表示
+      this.setDefaultJapanPosition();
     }
   }
 
