@@ -17,6 +17,11 @@ flowchart TD
     TC --> AC
 
     AC --> P[progress.md]
+
+    MI[map-interaction.md] -.-> SP
+    MI -.-> AC
+    Store[store.md] -.-> SP
+    Store -.-> AC
 ```
 
 ### コアファイル（必須）
@@ -67,6 +72,8 @@ flowchart TD
 組織化に役立つ場合は、memory-bank/内に追加のファイル/フォルダを作成します：
 
 - 複雑な機能のドキュメント
+  - [マップ操作とインタラクション仕様](./map-interaction.instructions.md)
+  - [ストアパターン実装ガイドライン](./store.instructions.md)
 - 統合仕様
 - APIドキュメント
 - テスト戦略
