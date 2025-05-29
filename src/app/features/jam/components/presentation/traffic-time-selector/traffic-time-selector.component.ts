@@ -42,6 +42,8 @@ const TIME_SELECTOR_CONSTANTS = {
   HOUR_WIDTH: 50,
   /** アニメーション期間（ミリ秒） */
   ANIMATION_DURATION: 300,
+  /** ドラッグ操作の移動感度係数（値が大きいほど少ない動きで大きく移動） */
+  DRAG_SENSITIVITY: 1.7,
 };
 
 /**
@@ -299,8 +301,9 @@ export class TrafficTimeSelectorComponent implements AfterViewInit, OnDestroy {
             }
           }
 
-          // movementXを使用して直接移動量を取得（より効率的）
-          this.updateTimelineOffset(this.timelineOffset + event.movementX);
+          // movementXを使用して移動量を取得し、感度係数を適用して反応を向上
+          const enhancedMovement = event.movementX * TIME_SELECTOR_CONSTANTS.DRAG_SENSITIVITY;
+          this.updateTimelineOffset(this.timelineOffset + enhancedMovement);
 
           // タイムライン位置から、表示中の現在時刻（マーカー位置=中央）を計算して表示
           this.updateTempHourFromOffset();
@@ -393,10 +396,12 @@ export class TrafficTimeSelectorComponent implements AfterViewInit, OnDestroy {
         event.preventDefault();
 
         // ホイールの方向に応じてタイムラインをスクロール
+        // 1時間単位で移動し、合計2時間分(デフォルト)移動するようにする
+        const scrollMultiplier = 2; // ホイールでのスクロール時に何時間分移動するか
         const delta =
           event.deltaY > 0
-            ? -TIME_SELECTOR_CONSTANTS.HOUR_WIDTH
-            : TIME_SELECTOR_CONSTANTS.HOUR_WIDTH;
+            ? -TIME_SELECTOR_CONSTANTS.HOUR_WIDTH * scrollMultiplier
+            : TIME_SELECTOR_CONSTANTS.HOUR_WIDTH * scrollMultiplier;
         this.updateTimelineOffset(this.timelineOffset + delta);
 
         // タイムライン位置から時間を計算
