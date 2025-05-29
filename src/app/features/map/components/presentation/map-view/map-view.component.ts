@@ -10,7 +10,7 @@ import {
   output,
 } from '@angular/core';
 import { Subscription, fromEvent, merge } from 'rxjs';
-import { filter, map, switchMap, takeUntil, tap, throttleTime } from 'rxjs/operators';
+import { map, switchMap, takeUntil, tap, throttleTime } from 'rxjs/operators';
 
 import { LoadingViewComponent } from '../../../../../components/ui/loading-view/loading-view.component';
 import { getTrafficLevelColor } from '../../../../../features/jam/models/traffic-level.model';
@@ -121,6 +121,12 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
 
   // ドラッグ操作用の変数
   private isDragging = false;
+  // クリック判定用の変数
+  private pointerDownPosition: { x: number; y: number } | null = null;
+  private pointerDownTime = 0;
+  private readonly MAX_CLICK_DISTANCE = 5; // クリックと判断する最大移動距離（ピクセル）
+  private readonly MAX_CLICK_DURATION = 300; // クリックと判断する最大時間（ミリ秒）
+  private hasMoved = false; // ポインターダウン後に動いたかどうか
 
   // RxJSのサブスクリプション管理
   private subscriptions = new Subscription();
@@ -277,7 +283,15 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
             // タッチ操作の時は特に必要
             canvas.setPointerCapture(event.pointerId);
             this.isDragging = true;
-            return true;
+
+            // クリック判定のために位置と時間を記録
+            const rect = canvas.getBoundingClientRect();
+            this.pointerDownPosition = {
+              x: event.clientX - rect.left,
+              y: event.clientY - rect.top,
+            };
+            this.pointerDownTime = Date.now();
+            this.hasMoved = false;
           }),
           switchMap(() =>
             fromEvent<PointerEvent>(canvas, 'pointermove').pipe(
@@ -290,6 +304,10 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
                   fromEvent<PointerEvent>(canvas, 'pointercancel')
                 )
               ),
+              tap(() => {
+                // 動いたフラグを立てる
+                this.hasMoved = true;
+              }),
               map(moveEvent => {
                 // ネイティブのmovementX/Yプロパティを使用して移動量を取得
                 return {
@@ -312,30 +330,39 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
         fromEvent<PointerEvent>(canvas, 'pointerup'),
         fromEvent<PointerEvent>(canvas, 'pointercancel')
       ).subscribe((event: PointerEvent) => {
-        // ドラッグ処理終了
-        this.isDragging = false;
-
         // ポインターキャプチャを解放
         try {
           canvas.releasePointerCapture(event.pointerId);
         } catch {
           // pointercancel の場合にエラーになることがあるため無視
         }
-      })
-    );
 
-    // クリックイベント（短時間の操作の場合のみ）
-    this.subscriptions.add(
-      fromEvent<PointerEvent>(canvas, 'click')
-        .pipe(
-          filter(() => !this.isDragging) // ドラッグ操作の直後のクリックは無視
-        )
-        .subscribe(event => {
-          const rect = canvas.getBoundingClientRect();
-          const x = event.clientX - rect.left;
-          const y = event.clientY - rect.top;
-          this.mapClick.emit({ x, y });
-        })
+        // ドラッグ操作の終了前にクリック処理を行う
+        const rect = canvas.getBoundingClientRect();
+        const currentPosition = {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        };
+
+        const clickDuration = Date.now() - this.pointerDownTime;
+
+        // クリック判定
+        if (this.pointerDownPosition && !this.hasMoved && clickDuration < this.MAX_CLICK_DURATION) {
+          const distance = Math.sqrt(
+            Math.pow(currentPosition.x - this.pointerDownPosition.x, 2) +
+              Math.pow(currentPosition.y - this.pointerDownPosition.y, 2)
+          );
+
+          if (distance < this.MAX_CLICK_DISTANCE) {
+            // クリック条件を満たす場合はクリックイベントを発火
+            this.mapClick.emit({ x: currentPosition.x, y: currentPosition.y });
+          }
+        }
+
+        // クリックイベントの処理後にドラッグ状態をリセット
+        this.isDragging = false;
+        this.pointerDownPosition = null;
+      })
     );
   }
 
