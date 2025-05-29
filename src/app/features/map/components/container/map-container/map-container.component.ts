@@ -600,11 +600,17 @@ export class MapContainerComponent implements OnInit, AfterViewInit {
    * @returns ヒット検出距離
    */
   private calculateHitDistance(scale: number): number {
-    const baseHitDistance = 5; // 基本値（ピクセル単位）
-    const minHitDistance = 0.05; // 最小ヒット距離（地図座標系）
+    // 基本値（ピクセル単位）- 拡大率に関わらず一定のピクセル範囲でクリック判定
+    const baseHitDistance = 5;
+    // 最小ヒット距離（地図座標系）
+    const minHitDistance = 0.005;
+    // 最大ヒット距離（地図座標系）
+    const maxHitDistance = 0.05;
 
-    // スケールに応じて調整し、最小値を確保
-    return Math.max(minHitDistance, baseHitDistance / scale);
+    // スケールに応じて調整し、最小値と最大値を確保
+    // スケールが大きい（拡大表示）時は小さな検出距離
+    // スケールが小さい（縮小表示）時も適度な検出距離に制限
+    return Math.min(maxHitDistance, Math.max(minHitDistance, baseHitDistance / scale));
   }
 
   /**

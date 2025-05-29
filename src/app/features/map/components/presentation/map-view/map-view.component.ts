@@ -10,7 +10,7 @@ import {
   output,
 } from '@angular/core';
 import { Subscription, fromEvent, merge } from 'rxjs';
-import { filter, map, switchMap, takeUntil, tap, throttleTime } from 'rxjs/operators';
+import { map, switchMap, takeUntil, tap, throttleTime } from 'rxjs/operators';
 
 import { LoadingViewComponent } from '../../../../../components/ui/loading-view/loading-view.component';
 import { getTrafficLevelColor } from '../../../../../features/jam/models/traffic-level.model';
@@ -33,8 +33,8 @@ import { getTrafficLevelLabel, setRoadStyleByTrafficLevel } from './road-style.h
  * MapView内で使用する定数
  */
 const MAP_VIEW_CONSTANTS = {
-  /** ズーム処理のスムージング係数（0.1 = 10%ずつ） */
-  ZOOM_FACTOR: 0.1,
+  /** ズーム処理のスムージング係数（0.15 = 15%ずつ、値が大きいほど素早くズームする） */
+  ZOOM_FACTOR: 0.15,
   /** マップの横方向の余白率（0.95 = 95%表示） */
   MAP_WIDTH_SCALE_FACTOR: 0.95,
   /** マップの縦方向の余白率（0.85 = 85%表示） */
@@ -45,6 +45,12 @@ const MAP_VIEW_CONSTANTS = {
   Y_OFFSET_ADJUSTMENT: 0.1,
   /** ポインターイベントの間引き時間（ミリ秒、16ms ≒ 60fps） */
   POINTER_THROTTLE_MS: 16,
+  /** ドラッグ操作の移動感度係数（値が大きいほど少ない動きで大きく移動） */
+  DRAG_SENSITIVITY: 15.0,
+  /** ズームレベルに応じたドラッグ感度の調整係数（値が小さいほど拡大時の移動量が小さくなる） */
+  SCALE_SENSITIVITY_FACTOR: 0.4,
+  /** 基準ズームレベル（このレベルでデフォルトの感度になる） */
+  REFERENCE_SCALE: 20,
   /** ポリゴン描画の線幅 */
   POLYGON_LINE_WIDTH: 0.8,
   /** ポリゴン塗りつぶし色 */
@@ -121,6 +127,12 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
 
   // ドラッグ操作用の変数
   private isDragging = false;
+  // クリック判定用の変数
+  private pointerDownPosition: { x: number; y: number } | null = null;
+  private pointerDownTime = 0;
+  private readonly MAX_CLICK_DISTANCE = 3; // クリックと判断する最大移動距離（ピクセル、値を小さくして反応を改善）
+  private readonly MAX_CLICK_DURATION = 250; // クリックと判断する最大時間（ミリ秒）
+  private hasMoved = false; // ポインターダウン後に動いたかどうか
 
   // RxJSのサブスクリプション管理
   private subscriptions = new Subscription();
@@ -277,7 +289,15 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
             // タッチ操作の時は特に必要
             canvas.setPointerCapture(event.pointerId);
             this.isDragging = true;
-            return true;
+
+            // クリック判定のために位置と時間を記録
+            const rect = canvas.getBoundingClientRect();
+            this.pointerDownPosition = {
+              x: event.clientX - rect.left,
+              y: event.clientY - rect.top,
+            };
+            this.pointerDownTime = Date.now();
+            this.hasMoved = false;
           }),
           switchMap(() =>
             fromEvent<PointerEvent>(canvas, 'pointermove').pipe(
@@ -290,11 +310,21 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
                   fromEvent<PointerEvent>(canvas, 'pointercancel')
                 )
               ),
+              tap(() => {
+                // 動いたフラグを立てる
+                this.hasMoved = true;
+              }),
               map(moveEvent => {
-                // ネイティブのmovementX/Yプロパティを使用して移動量を取得
+                // ズームレベルに応じた感度係数を計算
+                const scaleSensitivity = this.calculateScaleBasedSensitivity(
+                  this.transform().scale
+                );
+                // ネイティブのmovementX/Yプロパティを使用して移動量を取得し、感度係数を適用
                 return {
-                  deltaX: moveEvent.movementX,
-                  deltaY: moveEvent.movementY,
+                  deltaX:
+                    moveEvent.movementX * MAP_VIEW_CONSTANTS.DRAG_SENSITIVITY * scaleSensitivity,
+                  deltaY:
+                    moveEvent.movementY * MAP_VIEW_CONSTANTS.DRAG_SENSITIVITY * scaleSensitivity,
                 };
               })
             )
@@ -312,30 +342,39 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
         fromEvent<PointerEvent>(canvas, 'pointerup'),
         fromEvent<PointerEvent>(canvas, 'pointercancel')
       ).subscribe((event: PointerEvent) => {
-        // ドラッグ処理終了
-        this.isDragging = false;
-
         // ポインターキャプチャを解放
         try {
           canvas.releasePointerCapture(event.pointerId);
         } catch {
           // pointercancel の場合にエラーになることがあるため無視
         }
-      })
-    );
 
-    // クリックイベント（短時間の操作の場合のみ）
-    this.subscriptions.add(
-      fromEvent<PointerEvent>(canvas, 'click')
-        .pipe(
-          filter(() => !this.isDragging) // ドラッグ操作の直後のクリックは無視
-        )
-        .subscribe(event => {
-          const rect = canvas.getBoundingClientRect();
-          const x = event.clientX - rect.left;
-          const y = event.clientY - rect.top;
-          this.mapClick.emit({ x, y });
-        })
+        // ドラッグ操作の終了前にクリック処理を行う
+        const rect = canvas.getBoundingClientRect();
+        const currentPosition = {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        };
+
+        const clickDuration = Date.now() - this.pointerDownTime;
+
+        // クリック判定
+        if (this.pointerDownPosition && !this.hasMoved && clickDuration < this.MAX_CLICK_DURATION) {
+          const distance = Math.sqrt(
+            Math.pow(currentPosition.x - this.pointerDownPosition.x, 2) +
+              Math.pow(currentPosition.y - this.pointerDownPosition.y, 2)
+          );
+
+          if (distance < this.MAX_CLICK_DISTANCE) {
+            // クリック条件を満たす場合はクリックイベントを発火
+            this.mapClick.emit({ x: currentPosition.x, y: currentPosition.y });
+          }
+        }
+
+        // クリックイベントの処理後にドラッグ状態をリセット
+        this.isDragging = false;
+        this.pointerDownPosition = null;
+      })
     );
   }
 
@@ -857,5 +896,21 @@ export class MapViewComponent implements AfterViewInit, OnDestroy {
 
       ctx.fillText(line, x, lineY);
     });
+  }
+
+  /**
+   * 現在のズームスケールに基づいて感度係数を計算する
+   * 拡大しているほど（スケールが大きいほど）感度を下げて細かい操作を可能にし、
+   * 縮小しているほど（スケールが小さいほど）感度を上げて広い範囲の移動を容易にする
+   *
+   * @param currentScale 現在のズームスケール
+   * @returns スケールに応じた感度係数
+   */
+  private calculateScaleBasedSensitivity(currentScale: number): number {
+    // 対数スケールでの変換により、ズームレベルに応じた滑らかな感度調整を実現
+    const scaleRatio = MAP_VIEW_CONSTANTS.REFERENCE_SCALE / Math.max(1, currentScale);
+
+    // 感度調整にべき乗（SCALE_SENSITIVITY_FACTOR）を適用して非線形に調整
+    return Math.pow(scaleRatio, MAP_VIEW_CONSTANTS.SCALE_SENSITIVITY_FACTOR);
   }
 }

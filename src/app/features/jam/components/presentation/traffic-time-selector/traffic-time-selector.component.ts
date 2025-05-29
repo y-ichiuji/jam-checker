@@ -42,6 +42,8 @@ const TIME_SELECTOR_CONSTANTS = {
   HOUR_WIDTH: 50,
   /** アニメーション期間（ミリ秒） */
   ANIMATION_DURATION: 300,
+  /** ドラッグ操作の移動感度係数（値が大きいほど少ない動きで大きく移動） */
+  DRAG_SENSITIVITY: 1.7,
 };
 
 /**
@@ -88,6 +90,13 @@ export class TrafficTimeSelectorComponent implements AfterViewInit, OnDestroy {
   // ドラッグ操作用の状態変数
   private isDragging = false;
   private tempSelectedHour: HourOfDay | null = null;
+
+  // クリック判定用の変数
+  private pointerDownPosition: { x: number } | null = null;
+  private pointerDownTime = 0;
+  private readonly MAX_CLICK_DISTANCE = 5; // クリックと判断する最大移動距離（ピクセル）
+  private readonly MAX_CLICK_DURATION = 300; // クリックと判断する最大時間（ミリ秒）
+  private hasMoved = false; // ポインターダウン後に動いたかどうか
 
   // アニメーション用の状態変数
   private isAnimating = false;
@@ -249,6 +258,14 @@ export class TrafficTimeSelectorComponent implements AfterViewInit, OnDestroy {
         event.preventDefault();
         this.isDragging = true;
 
+        // クリック判定のために位置と時間を記録
+        const rect = canvas.getBoundingClientRect();
+        this.pointerDownPosition = {
+          x: event.clientX - rect.left,
+        };
+        this.pointerDownTime = Date.now();
+        this.hasMoved = false;
+
         // アニメーションがあれば停止
         if (this.isAnimating) {
           this.isAnimating = false;
@@ -267,8 +284,26 @@ export class TrafficTimeSelectorComponent implements AfterViewInit, OnDestroy {
         .subscribe(event => {
           if (!this.isDragging) return;
 
-          // movementXを使用して直接移動量を取得（より効率的）
-          this.updateTimelineOffset(this.timelineOffset + event.movementX);
+          // pointerDownPosition が記録されている場合のみ移動距離チェック
+          if (this.pointerDownPosition) {
+            const canvas = this.timeCanvasRef.nativeElement;
+            const rect = canvas.getBoundingClientRect();
+            const currentPosition = {
+              x: event.clientX - rect.left,
+            };
+
+            // 移動距離を計算
+            const distance = Math.abs(currentPosition.x - this.pointerDownPosition.x);
+
+            // 一定以上の距離を移動した場合のみ移動フラグを立てる
+            if (distance > this.MAX_CLICK_DISTANCE) {
+              this.hasMoved = true;
+            }
+          }
+
+          // movementXを使用して移動量を取得し、感度係数を適用して反応を向上
+          const enhancedMovement = event.movementX * TIME_SELECTOR_CONSTANTS.DRAG_SENSITIVITY;
+          this.updateTimelineOffset(this.timelineOffset + enhancedMovement);
 
           // タイムライン位置から、表示中の現在時刻（マーカー位置=中央）を計算して表示
           this.updateTempHourFromOffset();
@@ -279,8 +314,6 @@ export class TrafficTimeSelectorComponent implements AfterViewInit, OnDestroy {
     this.subscriptions.add(
       fromEvent<PointerEvent>(window, 'pointerup').subscribe(event => {
         if (this.isDragging) {
-          this.isDragging = false;
-
           // キャンバス要素があれば、ポインターキャプチャを解放
           if (canvas) {
             try {
@@ -290,20 +323,36 @@ export class TrafficTimeSelectorComponent implements AfterViewInit, OnDestroy {
             }
           }
 
-          // 一時的な選択時間をクリア
-          this.tempSelectedHour = null;
+          // クリック判定（ポインターダウンの位置情報あり、大きな移動なし、短時間の操作）
+          const rect = canvas.getBoundingClientRect();
+          const currentPosition = {
+            x: event.clientX - rect.left,
+          };
 
-          // 現在のタイムラインオフセットから、画面中央（マーカーのある位置）の時刻を計算
-          const centerHour = this.calculateHourFromOffset() as HourOfDay;
+          const clickDuration = Date.now() - this.pointerDownTime;
 
-          // ドラッグ終了時の状態を確保するためにまずイベントを発火
-          // この時点で時間変更イベントを先に発行することで、状態の同期を確実にする
-          if (centerHour !== this.selectedHour()) {
-            this.hourChange.emit(centerHour);
+          if (
+            this.pointerDownPosition &&
+            !this.hasMoved &&
+            clickDuration < this.MAX_CLICK_DURATION
+          ) {
+            const distance = Math.abs(currentPosition.x - this.pointerDownPosition.x);
+
+            if (distance < this.MAX_CLICK_DISTANCE) {
+              // クリック条件を満たす場合はクリック処理を実行
+              this.handleTimelineClick(currentPosition.x);
+            } else {
+              // 通常のドラッグ終了処理
+              this.handleDragEnd();
+            }
+          } else {
+            // 通常のドラッグ終了処理
+            this.handleDragEnd();
           }
 
-          // 中心の時間にスナップ（イベント発火後にアニメーション）
-          this.animateToHour(centerHour);
+          // ドラッグ状態をリセット
+          this.isDragging = false;
+          this.pointerDownPosition = null;
         }
       })
     );
@@ -338,22 +387,8 @@ export class TrafficTimeSelectorComponent implements AfterViewInit, OnDestroy {
       })
     );
 
-    // click - 時間を中央に配置
-    this.subscriptions.add(
-      fromEvent<PointerEvent>(canvas, 'click').subscribe(event => {
-        // ドラッグ操作の後のクリックイベントは無視（既に処理済み）
-        if (!this.isDragging) {
-          const rect = canvas.getBoundingClientRect();
-          const x = event.clientX - rect.left;
-          // 既にアニメーション中の場合はキャンセルして新しいアニメーションを開始
-          if (this.isAnimating) {
-            cancelAnimationFrame(this.animationFrameId);
-            this.isAnimating = false;
-          }
-          this.handleTimelineClick(x);
-        }
-      })
-    );
+    // 標準のclickイベントハンドラーは削除
+    // クリック検出は pointerup で行うため、このハンドラーは必要なくなりました
 
     // wheel - ホイールスクロール
     this.subscriptions.add(
@@ -361,10 +396,12 @@ export class TrafficTimeSelectorComponent implements AfterViewInit, OnDestroy {
         event.preventDefault();
 
         // ホイールの方向に応じてタイムラインをスクロール
+        // 1時間単位で移動し、合計2時間分(デフォルト)移動するようにする
+        const scrollMultiplier = 2; // ホイールでのスクロール時に何時間分移動するか
         const delta =
           event.deltaY > 0
-            ? -TIME_SELECTOR_CONSTANTS.HOUR_WIDTH
-            : TIME_SELECTOR_CONSTANTS.HOUR_WIDTH;
+            ? -TIME_SELECTOR_CONSTANTS.HOUR_WIDTH * scrollMultiplier
+            : TIME_SELECTOR_CONSTANTS.HOUR_WIDTH * scrollMultiplier;
         this.updateTimelineOffset(this.timelineOffset + delta);
 
         // タイムライン位置から時間を計算
@@ -382,37 +419,52 @@ export class TrafficTimeSelectorComponent implements AfterViewInit, OnDestroy {
 
   /**
    * タイムライン上のクリック位置に対応する時間を中央に配置
+   * クリック位置を基準に、最も近い時間帯に補正して選択します
    */
-  private handleTimelineClick(x: number): void {
-    // クリック位置から時間を計算
+  private handleTimelineClick(clickX: number): void {
     const hourWidth = TIME_SELECTOR_CONSTANTS.HOUR_WIDTH;
     const totalWidth = hourWidth * 24;
-    let clickPos = (x - this.timelineOffset) % totalWidth;
-    if (clickPos < 0) clickPos += totalWidth;
 
-    // 位置から時間を計算（小数点以下を含む）
-    const exactHour = clickPos / hourWidth;
+    // クリックした位置をタイムライン上の座標に変換
+    let clickPosition = (clickX - this.timelineOffset) % totalWidth;
 
-    // 12:29をクリックした時は12:00、12:30をクリックした時は13:00に補正
-    let clickedHour: HourOfDay;
-    if (exactHour - Math.floor(exactHour) < 0.5) {
-      // 0.5未満は下の時間（例: 12.3 → 12）
-      clickedHour = Math.floor(exactHour) as HourOfDay;
-    } else {
-      // 0.5以上は上の時間（例: 12.7 → 13）
-      clickedHour = Math.ceil(exactHour) as HourOfDay;
+    // 負の値を正の値に変換（24時間周期を維持）
+    if (clickPosition < 0) {
+      clickPosition += totalWidth;
     }
 
-    // 24時間表記に調整
-    clickedHour = (((clickedHour % 24) + 24) % 24) as HourOfDay;
+    // 時間区間の中央を基準に時間を計算するための調整
+    let adjustedPosition = clickPosition - hourWidth / 2;
+    if (adjustedPosition < 0) {
+      adjustedPosition += totalWidth;
+    }
+
+    // 位置から正確な時間を計算（小数点以下を含む）
+    const exactHour = adjustedPosition / hourWidth;
+
+    // 時間の端数を処理（0.5未満は切り捨て、0.5以上は切り上げ）
+    let clickedHour: number;
+    if (exactHour - Math.floor(exactHour) < 0.5) {
+      // 例: 12.3 → 12
+      clickedHour = Math.floor(exactHour);
+    } else {
+      // 例: 12.7 → 13
+      clickedHour = Math.ceil(exactHour);
+    }
+
+    // 24時間表記に正規化（負の値や24以上の値を0-23の範囲に収める）
+    clickedHour = ((clickedHour % 24) + 24) % 24;
+
+    // HourOfDayとして型変換（0-23の整数値）
+    const selectedHour = clickedHour as HourOfDay;
 
     // 時間が変わった場合、先にイベントを発火してからアニメーション
-    if (clickedHour !== this.selectedHour()) {
-      this.hourChange.emit(clickedHour);
+    if (selectedHour !== this.selectedHour()) {
+      this.hourChange.emit(selectedHour);
     }
 
     // 選択された時間に合わせてアニメーションで調整
-    this.animateToHour(clickedHour);
+    this.animateToHour(selectedHour);
   }
 
   /**
@@ -744,5 +796,26 @@ export class TrafficTimeSelectorComponent implements AfterViewInit, OnDestroy {
     ctx.arc(centerX, centerY + markerRadius + 6, 3, 0, Math.PI * 2);
     ctx.fillStyle = TIME_SELECTOR_CONSTANTS.MARKER_COLOR;
     ctx.fill();
+  }
+
+  /**
+   * ドラッグ操作の終了処理
+   * タイムライン位置から現在時刻を計算し、変更があれば親コンポーネントに通知
+   * その後、選択された時間に合わせてタイムラインを調整
+   */
+  private handleDragEnd(): void {
+    // 一時選択時間をリセット
+    this.tempSelectedHour = null;
+
+    // 中央位置の時間を計算
+    const centerHour = this.calculateHourFromOffset() as HourOfDay;
+
+    // 時間が変わった場合、先にイベントを発行してからアニメーション
+    if (centerHour !== this.selectedHour()) {
+      this.hourChange.emit(centerHour);
+    }
+
+    // 選択された時間に合わせてアニメーションで調整
+    this.animateToHour(centerHour);
   }
 }
